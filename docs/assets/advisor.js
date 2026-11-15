@@ -187,8 +187,8 @@
       feas.forEach(x => (groups[x.how] = groups[x.how] || []).push(x));
       $("a-sub").innerHTML = Object.keys(groups).length ? Object.entries(groups).map(([how, xs]) => `
         <details${how.startsWith("PC*") ? " open" : ""}><summary><b>${esc(how)}</b> — ${xs.length} substrates</summary>
-        <div class="table-wrap" style="margin-top:8px"><table><thead><tr><th>Substrate</th><th>Class / group</th><th class="num">ΔG</th><th class="num">kcal/mol</th><th>Reliability</th></tr></thead><tbody>
-        ${xs.map(x => `<tr data-id="${x.m.id}"><td>${esc(x.m.name)}</td><td class="hint">${esc(x.m.class || "")}${x.m.functional_groups && x.m.functional_groups.length ? " · " + esc(x.m.functional_groups[0]) : ""}</td><td class="num">${g(x.g)}</td><td class="num">${(x.g * KCAL).toFixed(1)}</td><td>${RDBDatabase.confBadge(x.m.confidence)}</td></tr>`).join("")}
+        <div class="table-wrap" style="margin-top:8px"><table><thead><tr><th>Substrate</th><th>Activated group</th><th class="num">ΔG</th><th class="num">kcal/mol</th><th>Reliability</th></tr></thead><tbody>
+        ${xs.map(x => `<tr data-id="${x.m.id}"><td>${esc(x.m.name)}</td><td class="hint">${esc((x.m.functional_groups || [])[0] || "")}</td><td class="num">${g(x.g)}</td><td class="num">${(x.g * KCAL).toFixed(1)}</td><td>${RDBDatabase.confBadge(x.m.confidence)}</td></tr>`).join("")}
         </tbody></table></div></details>`).join("") : '<p class="hint">No substrate in the database is within reach.</p>';
       $("a-sub").querySelectorAll("tr[data-id]").forEach(tr => tr.onclick = () => RDBDatabase.showDetail(mols.find(m => String(m.id) === tr.dataset.id)));
     }
@@ -227,7 +227,7 @@
       rows.sort((a, b) => rank[a.c.verdict] - rank[b.c.verdict] || (b.c.complete - a.c.complete) || a.score - b.score);
       $("r-out").innerHTML = rows.length ? `<p class="hint">${rows.filter(x => x.c.verdict === "good").length} feasible, ${rows.filter(x => x.c.verdict === "border").length} borderline out of ${rows.length} catalysts with data.</p>
         <div class="table-wrap"><table><thead><tr><th>#</th><th>Photocatalyst</th><th>Cycle</th><th>Electron-transfer steps</th><th class="num">E*<sub>ox</sub> / E*<sub>red</sub></th><th>Verdict</th></tr></thead><tbody>
-        ${rows.slice(0, 60).map((x, k) => `<tr data-id="${x.pc.id}"><td>${k + 1}</td><td><b>${esc(x.pc.name)}</b><div class="hint">${esc(x.pc.class || "")}</div>${practical(x.pc)}</td><td>${x.c.mode}</td><td class="hint">${cycleText(x.c)}</td>
+        ${rows.slice(0, 60).map((x, k) => `<tr data-id="${x.pc.id}"><td>${k + 1}</td><td><b>${esc(x.pc.name)}</b>${practical(x.pc)}</td><td>${x.c.mode}</td><td class="hint">${cycleText(x.c)}</td>
           <td class="num">${fmt(x.pc.e_star_ox, 2)} / ${fmt(x.pc.e_star_red, 2)}</td><td>${verdictBadge(x.c.verdict)}${marginBar(x.c.worst)}${avoid && x.key != null && x.key < -0.8 ? '<div class="hint">much stronger than needed</div>' : ""}</td></tr>`).join("")}
         </tbody></table></div>` : '<p class="hint">No catalyst in the database has the potentials needed for this analysis.</p>';
       $("r-out").querySelectorAll("tr[data-id]").forEach(tr => tr.onclick = () => RDBDatabase.showDetail(mols.find(m => String(m.id) === tr.dataset.id)));

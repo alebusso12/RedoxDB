@@ -7,7 +7,6 @@
     { key: "struct", label: "Structure", sort: false },
     { key: "name", label: "Name" },
     { key: "category", label: "Type" },
-    { key: "class", label: "Class" },
     { key: "e_ox", label: "E<sub>ox</sub>", num: true },
     { key: "e_red", label: "E<sub>red</sub>", num: true },
     { key: "e00", label: "E<sub>0,0</sub> (eV)", num: true },
@@ -29,15 +28,13 @@
 
   function render(root, mols) {
     state.mols = mols;
-    const classes = [...new Set(mols.map(m => m.class).filter(Boolean))].sort();
     const solvents = [...new Set(mols.map(m => m.solvent).filter(Boolean))].sort();
     root.innerHTML = `
       <div class="card stack">
-        <div class="grid c4">
-          <label class="field">Search (name, alias, CAS, class, group)<input id="q" type="search" placeholder="e.g. 4CzIPN, acridinium, NHPI"></label>
+        <div class="grid c3">
+          <label class="field">Search (name, alias, CAS, group)<input id="q" type="search" placeholder="e.g. 4CzIPN, acridinium, NHPI"></label>
           <label class="field">Type<select id="f-cat"><option value="">All</option><option value="photocatalyst">Photocatalysts</option><option value="substrate">Substrates / reagents</option></select></label>
           <label class="field">Kind<select id="f-kind"><option value="">All</option><option value="organic">Organic</option><option value="organometallic">Organometallic</option><option value="inorganic">Inorganic</option></select></label>
-          <label class="field">Class<select id="f-class"><option value="">All</option>${classes.map(c => `<option>${esc(c)}</option>`).join("")}</select></label>
         </div>
         <div class="grid c4">
           <label class="field">Potential<select id="f-pot">
@@ -58,7 +55,7 @@
       <div class="table-wrap" style="margin-top:14px"><table><thead><tr>${COLS.map(c => `<th data-k="${c.key}" class="${c.num ? "num" : ""}">${c.label}</th>`).join("")}</tr></thead><tbody id="tbody"></tbody></table></div>`;
 
     const $ = id => root.querySelector("#" + id);
-    const ids = ["q", "f-cat", "f-kind", "f-class", "f-pot", "f-min", "f-max", "f-solv", "f-conf", "f-smode"];
+    const ids = ["q", "f-cat", "f-kind", "f-pot", "f-min", "f-max", "f-solv", "f-conf", "f-smode"];
     ids.forEach(id => $(id).addEventListener("input", apply));
     let smiT;
     $("f-smiles").addEventListener("input", () => { clearTimeout(smiT); smiT = setTimeout(apply, 350); });
@@ -82,7 +79,7 @@
 
     function apply() {
       const q = $("q").value.trim().toLowerCase();
-      const cat = $("f-cat").value, kind = $("f-kind").value, cls = $("f-class").value, solv = $("f-solv").value;
+      const cat = $("f-cat").value, kind = $("f-kind").value, solv = $("f-solv").value;
       const pot = $("f-pot").value, lo = RDB.num($("f-min").value), hi = RDB.num($("f-max").value);
       const conf = $("f-conf").value;
       const smi = $("f-smiles").value.trim(), smode = $("f-smode").value;
@@ -98,7 +95,6 @@
       const out = state.mols.filter(m => {
         if (cat && m.category !== cat) return false;
         if (kind && m.kind !== kind) return false;
-        if (cls && m.class !== cls) return false;
         if (solv && m.solvent !== solv) return false;
         if (conf === "high" && m.confidence !== "high") return false;
         if (conf === "hm" && !(m.confidence === "high" || m.confidence === "medium")) return false;
@@ -109,7 +105,7 @@
           if (hi != null && v > hi) return false;
         }
         if (q) {
-          const hay = [m.name, m.iupac_name, m.cas, m.class, m.notes, ...(m.aliases || []), ...(m.functional_groups || [])].join(" ").toLowerCase();
+          const hay = [m.name, m.iupac_name, m.cas, m.notes, ...(m.aliases || []), ...(m.functional_groups || [])].join(" ").toLowerCase();
           if (!hay.includes(q)) return false;
         }
         if (qId || qIdx) {
@@ -160,10 +156,9 @@
   }
   function row(m) {
     return `<tr data-id="${esc(m.id)}">
-      <td><div class="struct">${molSVG(m.smiles, 90, 60)}</div></td>
+      <td><div class="struct">${RDB.structHTML(m.smiles, 132, 72)}</div></td>
       <td><b>${esc(m.name)}</b>${m.aliases && m.aliases.length ? `<div class="hint">${esc(m.aliases.slice(0, 2).join(", "))}</div>` : ""}</td>
       <td>${catBadge(m)}</td>
-      <td>${esc(m.class || "")}</td>
       ${potCell(m.e_ox, m.e_ox_type)}${potCell(m.e_red, m.e_red_type)}
       <td class="num">${fmt(m.e00, 2)}</td>
       ${potCell(m.e_star_ox)}${potCell(m.e_star_red)}
@@ -177,7 +172,7 @@
       <h2>${esc(m.name)} ${catBadge(m)} ${confBadge(m.confidence)}</h2>
       ${m.iupac_name ? `<p class="hint">${esc(m.iupac_name)}</p>` : ""}
       <div class="grid c2">
-        <div><div class="big-struct">${molSVG(m.smiles, 360, 240)}</div>
+        <div><div class="big-struct">${RDB.structHTML(m.smiles, 340, 225)}</div>
           ${m.smiles ? `<p class="mono hint" style="word-break:break-all;margin-top:6px">${esc(m.smiles)}</p>` : ""}</div>
         <div class="stack">
           <div class="kpis">
@@ -188,7 +183,7 @@
           </div>
           <dl class="props">
             ${prop("Aliases", esc((m.aliases || []).join(", ")))}
-            ${prop("Class", esc(m.class))}${prop("Kind", esc(m.kind))}
+            ${prop("Kind", esc(m.kind))}
             ${prop("CAS", esc(m.cas))}
             ${prop("E<sub>0,0</sub>", m.e00 != null ? fmt(m.e00, 2) + " eV" + (m.excited_state ? " (" + esc(m.excited_state) + ")" : "") : "")}
             ${prop("Lifetime", m.tau_ns != null ? fmt(m.tau_ns, m.tau_ns < 10 ? 1 : 0) + " ns" : "")}

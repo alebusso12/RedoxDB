@@ -14,6 +14,7 @@
         kpi("With excited-state data", mols.filter(m => m.e_star_ox != null || m.e_star_red != null).length) +
         kpi("Verified values", mols.filter(m => m.confidence === "high").length) + kpi("Reaction types", rxns.length);
     },
+    learn: el => RDBLearn.render(el),
     db: el => RDBDatabase.render(el, mols),
     map: el => RDBAdvisor.renderMap(el, mols),
     estar: el => RDBEstar.render(el, mols),
@@ -28,7 +29,7 @@
     document.querySelectorAll("section[data-view]").forEach(s => { s.hidden = s.dataset.view !== sec; });
     document.querySelectorAll("nav.sections a").forEach(a => a.classList.toggle("active", a.dataset.sec === sec));
     // render once; re-render when the address carries parameters (deep links from other tools)
-    if (!rendered[sec] || query || sec === "home") {
+    if (!rendered[sec] || (query && sec !== "learn") || sec === "home") {
       views[sec](document.getElementById("sec-" + sec));
       rendered[sec] = true;
     }

@@ -54,18 +54,80 @@
   function num(v) { return v == null || v === "" || isNaN(v) ? null : Number(v); }
 
   // ---------- structures (OpenChemLib, loaded from CDN) ----------
+  /* Structures are drawn once on a large canvas (OpenChemLib keeps a constant bond length there), cropped
+     to the molecule, and then scaled to fill the requested box without distortion. Upscaling of very small
+     molecules is capped so that O2 or a halide does not become a giant label. Line width stays constant on
+     screen (vector-effect in the CSS), so small and large structures look alike. */
   const svgCache = new Map();
-  function molSVG(smiles, w = 180, h = 120) {
+  const rawCache = new Map();
+  let svgSeq = 0;
+  function rawSVG(smiles) {
+    if (rawCache.has(smiles)) return rawCache.get(smiles);
+    let out = null;
+    try {
+      const m = window.OCL.Molecule.fromSmiles(smiles);
+      const big = m.getAllAtoms() > 45;
+      const s = m.toSVG(big ? 1400 : 700, big ? 1000 : 500, undefined, {
+        autoCrop: true, autoCropMargin: 10, suppressChiralText: true, suppressCIPParity: true, suppressESR: true, noStereoProblem: true
+      });
+      const vb = s.match(/viewBox="([-\d.]+) ([-\d.]+) ([\d.]+) ([\d.]+)"/);
+      if (vb) out = { svg: s, w: +vb[3], h: +vb[4] };
+    } catch (e) { out = null; }
+    rawCache.set(smiles, out);
+    return out;
+  }
+  function molSVG(smiles, w = 180, h = 120, maxScale = 1.6) {
     if (!smiles || !window.OCL) return "";
     const key = smiles + "|" + w + "x" + h;
     if (svgCache.has(key)) return svgCache.get(key);
+    const r = rawSVG(smiles);
     let out = "";
-    try {
-      const m = window.OCL.Molecule.fromSmiles(smiles);
-      out = m.toSVG(w, h, undefined, { suppressChiralText: true, noImplicitAtomLabelColors: false, autoCrop: true, autoCropMargin: 6 });
-    } catch (e) { out = ""; }
+    if (r) {
+      const k = Math.min(w / r.w, h / r.h, maxScale);
+      const id = "m" + (++svgSeq);
+      out = r.svg
+        .replace(/id="mol\d+"/, `id="${id}"`).replace(/#mol\d+/g, "#" + id)
+        .replace(/width="[^"]+" height="[^"]+"/, `width="${(r.w * k).toFixed(1)}" height="${(r.h * k).toFixed(1)}" preserveAspectRatio="xMidYMid meet"`)
+        .replace(/font-family: sans-serif;/, "font-family: Inter, Helvetica, Arial, sans-serif;");
+    }
     svgCache.set(key, out);
     return out;
+  }
+  /* Metal complexes are stored as dot-separated fragments (metal ion, ligands, counter-ions). Drawn as one
+     molecule they scatter, and octahedral coordinates overlap, so they are shown as a metal label plus each
+     distinct ligand with its multiplicity; counter-ions are left out of the drawing. */
+  const METAL_RE = /\[(Ir|Ru|Os|Cu|Fe|Cr|Co|Ni|Pt|Pd|Au|Ag|Zr|Ce|Re|W|Zn|Mg|U|Ti|Cd|Mo|Mn|V|Rh|Eu|La|Sm)\b[^\]]*\]/;
+  function isCounterIon(frag) {
+    if (METAL_RE.test(frag)) return false;
+    const heavy = (frag.match(/Cl|Br|[BCNOFPSI]/g) || []).length;
+    if (!/[cC]/.test(frag.replace(/Cl/g, ""))) return heavy <= 7;                // PF6-, BF4-, Cl-, ClO4-, SbF6-
+    return heavy <= 9 && /S/.test(frag) && /F/.test(frag) && !/c/.test(frag);  // OTf-, NTf2-like
+  }
+  function complexParts(smiles) {
+    if (!smiles || smiles.indexOf(".") < 0 || !METAL_RE.test(smiles)) return null;
+    const frags = smiles.split(".").filter(f => f && !isCounterIon(f));
+    const metals = frags.filter(f => METAL_RE.test(f) && (f.match(/[A-Za-z]/g) || []).length <= 6);
+    const ligands = frags.filter(f => !metals.includes(f));
+    if (!metals.length || !ligands.length) return null;
+    const groups = new Map();
+    ligands.forEach(f => {
+      let k = f;
+      try { k = window.OCL.Molecule.fromSmiles(f).getIDCode(); } catch (e) { /* keep text key */ }
+      const g = groups.get(k) || { smiles: f, n: 0 };
+      g.n++; groups.set(k, g);
+    });
+    const metal = metals[0].match(METAL_RE)[1];
+    const charge = (metals[0].match(/\+(\d*)/) || [])[0] || "";
+    return { metal, charge, ligands: [...groups.values()].sort((a, b) => b.n - a.n) };
+  }
+  function structHTML(smiles, w = 180, h = 120) {
+    const c = window.OCL ? complexParts(smiles) : null;
+    if (!c) return molSVG(smiles, w, h);
+    const n = Math.min(c.ligands.length, 3);
+    const lw = Math.floor((w - 34) / n) - 4, lh = h - 6;
+    return `<div class="complex" title="metal centre + ligands (counter-ions not drawn)">
+      <span class="metal">${esc(c.metal)}${c.charge ? `<sup>${esc(c.charge.replace("+", ""))}+</sup>` : ""}</span>
+      ${c.ligands.slice(0, 3).map(l => `<span class="lig">${molSVG(l.smiles, lw, lh - (l.n > 1 ? 12 : 0), 1.2)}${l.n > 1 ? `<b>×${l.n}</b>` : ""}</span>`).join("")}</div>`;
   }
   function molFromSmiles(smiles) { try { return window.OCL.Molecule.fromSmiles(smiles); } catch (e) { return null; } }
 
@@ -260,7 +322,7 @@
 
   window.RDB = {
     remote, sb, MOL_FIELDS, REFERENCES, REF_DOI, refOffset, toSCE, fromSCE, refOptions,
-    esc, fmt, fmtV, num, doiLink, molSVG, molFromSmiles,
+    esc, fmt, fmtV, num, doiLink, molSVG, structHTML, molFromSmiles,
     loadMolecules, loadReactions, session, signIn, signOut, myRole, gate, initTheme,
     download, toCSV, modal, parseNumericTable
   };

@@ -5,7 +5,7 @@
   const { esc, fmt, sb } = RDB;
   let ctx = null, all = [];
 
-  const COMPARE = ["name", "smiles", "category", "kind", "class", "e_ox", "e_ox_type", "e_red", "e_red_type", "e00", "excited_state",
+  const COMPARE = ["name", "smiles", "category", "kind", "e_ox", "e_ox_type", "e_red", "e_red_type", "e00", "excited_state",
     "e_star_ox", "e_star_red", "tau_ns", "solvent", "doi", "review_doi", "confidence", "notes"];
 
   async function load() {
@@ -91,7 +91,7 @@
     return `<div class="card"><div class="row"><input type="checkbox" class="q-sel" value="${m.id}">
       <h3 style="margin:0">${esc(m.name)}</h3>${RDBDatabase.catBadge(m)}${RDBDatabase.confBadge(m.confidence)}<span class="spacer"></span>
       <span class="hint">${m.submitted_by ? "by " + esc(m.submitted_by) : "literature import"}</span></div>
-      <div class="row" style="margin-top:8px"><div class="struct" style="width:140px;height:90px">${RDB.molSVG(m.smiles, 140, 90)}</div>
+      <div class="row" style="margin-top:8px"><div class="struct" style="width:140px;height:90px">${RDB.structHTML(m.smiles, 140, 90)}</div>
       <div class="hint">E<sub>ox</sub> ${fmt(m.e_ox)} · E<sub>red</sub> ${fmt(m.e_red)} · E<sub>0,0</sub> ${fmt(m.e00)} · E*<sub>ox</sub> ${fmt(m.e_star_ox)} · E*<sub>red</sub> ${fmt(m.e_star_red)}<br>
       ${esc(m.solvent || "")} · ${RDB.doiLink(m.doi)}<br>${esc(m.notes || "")}</div></div>
       <div class="row end"><button class="btn small" data-act="edit" data-id="${m.id}">Edit</button>
@@ -185,7 +185,7 @@
     const $ = id => el.querySelector("#" + id);
     const draw = () => {
       const q = $("x-q").value.toLowerCase(), st = $("x-st").value, cf = $("x-cf").value;
-      const rows = all.filter(m => (!st || m.status === st) && (!cf || m.confidence === cf) && (!q || [m.name, ...(m.aliases || []), m.class].join(" ").toLowerCase().includes(q)));
+      const rows = all.filter(m => (!st || m.status === st) && (!cf || m.confidence === cf) && (!q || [m.name, ...(m.aliases || [])].join(" ").toLowerCase().includes(q)));
       $("x-n").textContent = rows.length + " entries";
       $("x-body").innerHTML = rows.map(m => `<tr data-id="${m.id}"><td>${esc(m.name)}</td><td>${RDBDatabase.catBadge(m)}</td><td>${esc(m.status)}</td><td>${RDBDatabase.confBadge(m.confidence)}</td>
         <td class="num">${fmt(m.e_ox)}</td><td class="num">${fmt(m.e_red)}</td><td class="num">${fmt(m.e_star_ox)}</td><td class="num">${fmt(m.e_star_red)}</td><td class="hint">${esc(m.doi || "")}</td></tr>`).join("");

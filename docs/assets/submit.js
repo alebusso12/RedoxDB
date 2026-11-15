@@ -8,7 +8,7 @@
     ["smiles", "SMILES", "text"], ["cas", "CAS", "text"],
     ["category", "Type *", "select", ["photocatalyst", "substrate"]],
     ["kind", "Kind", "select", ["organic", "organometallic", "inorganic"]],
-    ["class", "Class", "text"], ["functional_groups", "Activated group(s) (comma separated)", "text"],
+    ["functional_groups", "Activated group(s) (comma separated)", "text"],
     ["e_ox", "E_ox (M•+/M), V", "number"], ["e_ox_type", "E_ox type", "select", ["", "E1/2", "Ep", "Ep/2", "calc"]],
     ["e_red", "E_red (M/M•−), V", "number"], ["e_red_type", "E_red type", "select", ["", "E1/2", "Ep", "Ep/2", "calc"]],
     ["e00", "E0,0 (eV)", "number"], ["excited_state", "Excited state", "select", ["", "S1", "T1", "MLCT (T1)", "mixed"]],
