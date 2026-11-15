@@ -85,10 +85,65 @@
       <text x="380" y="50" fill="var(--accent-2)" style="fill:var(--accent-2)">E_pa (anodic peak, M → M•+)</text>
       <text x="200" y="290" fill="var(--accent)" style="fill:var(--accent)">E_pc (cathodic peak, M•+ → M)</text>
       <line x1="367" x2="367" y1="150" y2="190" stroke="var(--ok)" stroke-width="3"/>
-      <text x="470" y="160" fill="var(--ok)" style="fill:var(--ok)">E½ = (E_pa + E_pc)/2</text>
-      <text x="470" y="178" fill="var(--muted)" style="fill:var(--muted)">ΔE_p ≈ 59 mV / n if reversible</text>
+      <text x="480" y="232" fill="var(--ok)" style="fill:var(--ok)">E½ = (E_pa + E_pc)/2</text>
+      <text x="480" y="250" fill="var(--muted)" style="fill:var(--muted)">ΔE_p ≈ 57 mV / n if reversible</text>
     </g>
   </svg>`;
+
+  const SVG_CELL = `
+  <svg viewBox="0 0 760 300" class="diagram" role="img" aria-label="Three-electrode electrochemical cell">
+    <g fill="currentColor" font-size="13">
+      <rect x="560" y="20" width="170" height="70" rx="10" fill="var(--surface-2)" stroke="var(--border)"/>
+      <text x="645" y="50" text-anchor="middle" font-weight="700">Potentiostat</text>
+      <text x="645" y="70" text-anchor="middle" font-size="11" fill="var(--muted)" style="fill:var(--muted)">sets E(WE) vs RE, measures i</text>
+      <path d="M210 110 L 210 60 L 560 60" fill="none" stroke="var(--accent-2)" stroke-width="2"/>
+      <path d="M300 110 L 300 75 L 560 75" fill="none" stroke="var(--ok)" stroke-width="2"/>
+      <path d="M390 110 L 390 88 L 560 88" fill="none" stroke="var(--accent)" stroke-width="2"/>
+      <path d="M150 120 L 150 270 Q 150 285 165 285 L 435 285 Q 450 285 450 270 L 450 120" fill="none" stroke="var(--muted)" stroke-width="2.5"/>
+      <rect x="152" y="150" width="296" height="133" fill="var(--accent-soft)" opacity=".55"/>
+      <text x="300" y="275" text-anchor="middle" font-size="11" fill="var(--muted)" style="fill:var(--muted)">analyte (~1 mM) + 0.1–0.25 M Bu₄NPF₆ in dry, degassed solvent</text>
+      <rect x="200" y="110" width="20" height="130" rx="4" fill="var(--surface)" stroke="var(--accent-2)" stroke-width="2"/><rect x="203" y="234" width="14" height="6" fill="#333"/>
+      <text x="210" y="105" text-anchor="middle" font-weight="700" fill="var(--accent-2)" style="fill:var(--accent-2)">WE</text>
+      <text x="120" y="210" text-anchor="end" font-size="11">glassy carbon / Pt disk,</text><text x="120" y="224" text-anchor="end" font-size="11">polished</text>
+      <rect x="290" y="110" width="20" height="120" rx="8" fill="var(--surface)" stroke="var(--ok)" stroke-width="2"/><circle cx="300" cy="228" r="5" fill="var(--ok)"/>
+      <text x="300" y="105" text-anchor="middle" font-weight="700" fill="var(--ok)" style="fill:var(--ok)">RE</text>
+      <text x="300" y="250" text-anchor="middle" font-size="11">Ag/Ag⁺ or Ag wire behind a frit + internal Fc</text>
+      <path d="M390 110 L 390 230" stroke="var(--accent)" stroke-width="3"/><path d="M390 230 q 8 6 0 12 q -8 6 0 12" fill="none" stroke="var(--accent)" stroke-width="3"/>
+      <text x="390" y="105" text-anchor="middle" font-weight="700" fill="var(--accent)" style="fill:var(--accent)">CE</text>
+      <text x="470" y="215" font-size="11">Pt wire, larger area</text>
+      <path d="M440 140 L 500 140" stroke="var(--muted)" stroke-width="2"/><text x="505" y="135" font-size="11">N₂/Ar over the solution</text><text x="505" y="150" font-size="11">(sparge first, then blanket)</text>
+    </g>
+  </svg>`;
+
+  /* Finite-difference simulation of a reversible one-electron oxidation (Red → Ox + e⁻) under linear
+     diffusion with equal diffusion coefficients, so [Ox] + [Red] = C everywhere and the Nernst equation fixes
+     the surface concentrations. Returns sampled frames with E, i and the concentration profiles. */
+  function simulateCV(v) {
+    const F = 96485, R = 8.314, T = 298.15, f = F / (R * T);
+    const E0 = 0, E1 = -0.3, E2 = 0.4, D = 2e-5, C = 1e-6, A = 0.0707;
+    const tTot = 2 * (E2 - E1) / v;
+    const N = 140, L = 6 * Math.sqrt(D * tTot), dx = L / N, lam = 0.45, dt = lam * dx * dx / D;
+    const steps = Math.ceil(tTot / dt);
+    let ox = new Float64Array(N + 1), nxt = new Float64Array(N + 1);
+    const frames = [], every = Math.max(1, Math.floor(steps / 400));
+    for (let s = 0; s <= steps; s++) {
+      const t = s * dt;
+      const E = t <= tTot / 2 ? E1 + v * t : E2 - v * (t - tTot / 2);
+      for (let k = 1; k < N; k++) nxt[k] = ox[k] + lam * (ox[k + 1] - 2 * ox[k] + ox[k - 1]);
+      nxt[N] = 0;
+      const th = Math.exp(f * (E - E0));
+      nxt[0] = C * th / (1 + th);
+      [ox, nxt] = [nxt, ox];
+      const grad = (-3 * ox[0] + 4 * ox[1] - ox[2]) / (2 * dx);
+      const i = -F * A * D * grad;  // anodic current positive
+      if (s % every === 0 || s === steps) {
+        const prof = [];
+        for (let k = 0; k <= N * 0.6; k += 2) prof.push([k * dx * 1e4, ox[k] * 1e6, (C - ox[k]) * 1e6]);
+        frames.push({ E, i: i * 1e6, prof });
+      }
+    }
+    return frames;
+  }
 
   // ------------------------------------------------------------------ quizzes
   const QUIZZES = {
@@ -123,12 +178,20 @@
         e: "A huge driving force reaches groups you did not want to touch; choose 'strong enough', not 'as strong as possible'." }
     ],
     cv: [
-      { q: "Why is ferrocene added at the end of a CV experiment?", o: ["To make the solution conductive", "As an internal reference whose E½ is well known, to correct for the drift of pseudo-references", "To remove oxygen", "To increase the current"], a: 1,
-        e: "Ag-wire pseudo-references drift; quoting E vs Fc⁺/Fc (then converting to SCE) makes values comparable between labs." },
-      { q: "A wave shows an anodic peak but no cathodic peak on the return scan. Which value is the best estimate for photoredox comparisons?", o: ["E½", "E_p/2 of the anodic wave", "The switching potential", "The rest potential"], a: 1,
-        e: "Irreversible waves have no E½. E_p/2 (potential at half the peak current) approximates the thermodynamic potential better than E_p." },
-      { q: "What is the supporting electrolyte (e.g. 0.1 M Bu₄NPF₆) for?", o: ["It is the analyte", "It carries the current and minimises migration and resistance", "It is the reference", "It quenches excited states"], a: 1,
-        e: "Without excess inert electrolyte the solution is too resistive and the analyte moves by migration, distorting the CV." }
+      { q: "In the IUPAC convention, which way do positive potentials and oxidation currents point?", o: ["Positive potentials to the right, oxidation currents positive (up)", "Negative potentials to the right, reduction currents positive", "Positive potentials to the left, oxidation currents down", "It is not defined"], a: 0,
+        e: "IUPAC: E increases to the right and anodic (oxidation) currents are positive. The older US convention flips both; check the potential axis of any figure." },
+      { q: "Why does the current go through a peak and then decrease, even though the potential keeps becoming more favourable?", o: ["The electrode gets passivated", "Near the electrode the analyte is used up and the growing diffusion layer slows down the supply from the bulk", "The scan rate decreases", "The reference electrode drifts"], a: 1,
+        e: "Past E°′ the current is limited by diffusion; as the depleted layer grows, mass transport slows and the current decays — hence the duck shape." },
+      { q: "A reversible one-electron couple at 25 °C ideally shows ΔE_p of…", o: ["0 mV", "about 57 mV", "about 120 mV", "exactly 59 mV for any n"], a: 1,
+        e: "ΔE_p = 2.22 RT/F ≈ 57 mV for n = 1 (≈ 28.5 mV for a concerted two-electron wave). Values of 60–90 mV are common in practice because of ohmic drop." },
+      { q: "The return peak is missing at 100 mV/s but appears at 5 V/s. What is going on?", o: ["The electrode is dirty", "The oxidised/reduced species undergoes a chemical reaction (E_rC_i) that fast scans outrun", "Oxygen is present", "The electrolyte is too concentrated"], a: 1,
+        e: "An EC mechanism: at fast scan rates the experiment is quicker than the follow-up chemistry, so the product survives to be converted back." },
+      { q: "Why should ferrocene be present in every measurement rather than added only at the end?", o: ["It catalyses electron transfer", "Non-aqueous (pseudo-)references drift during the experiment, so each scan needs its own internal reference", "It removes oxygen", "It increases conductivity"], a: 1,
+        e: "Reporting vs the internal Fc⁺/Fc couple of the same scan cancels reference drift; use decamethylferrocene if Fc overlaps with your analyte." },
+      { q: "Ferrocene in your cell shows ΔE_p = 140 mV. What is the most likely problem?", o: ["Ferrocene decomposed", "Large uncompensated resistance (ohmic drop)", "Too much ferrocene", "Wrong plotting convention"], a: 1,
+        e: "Fc⁺/Fc is fast and reversible; a large ΔE_p means i·R_u distortion. Add electrolyte, move the RE closer to the WE, use a smaller electrode or slower scans, or apply iR compensation." },
+      { q: "Your substrate shows only an anodic peak (no return wave). Which value do you put in a photoredox design table?", o: ["E½", "E_p/2, stating that the wave is irreversible", "The switching potential", "Nothing can be reported"], a: 1,
+        e: "Irreversible waves have no E½; E_p/2 is the usual estimate (with the scan rate stated), as in Roth, Romero & Nicewicz's substrate compilation." }
     ],
     design: [
       { q: "Which control experiment shows that light is needed throughout the reaction (not only to start a chain)?", o: ["Running without catalyst", "Light on/off cycles while monitoring conversion", "Using a different solvent", "Doubling the substrate"], a: 1,
@@ -274,33 +337,102 @@
       <p class="hint">Ranges are indicative; check each value in the database. The <a href="#advisor">Reactivity advisor</a> does steps 3–4 automatically for every catalyst.</p>
       ${quizHTML("choose")}` },
 
-    { id: "cv", title: "6 · Measuring a redox potential by cyclic voltammetry", html: `
-      <p>In cyclic voltammetry the potential of a working electrode is swept linearly up and back while the current is recorded. When the potential reaches E of the analyte, it is oxidised (or reduced) at the electrode and a current peak appears.</p>
+    { id: "cv", title: "6 · Cyclic voltammetry: measuring a redox potential properly", html: `
+      <p class="hint">This chapter follows the structure of Elgrishi, Rountree, McCarthy, Rountree, Eisenhart and Dempsey, "A Practical Beginner's Guide to Cyclic Voltammetry", J. Chem. Educ. 2018, 95, 197 (${doiLink("10.1021/acs.jchemed.7b00361")}, open access) — read it, and its training modules in the Supporting Information, before your first measurement. The text below is a summary written for photoredox users.</p>
+
+      <h4>6.1 The electrode is a reagent whose strength you can dial</h4>
+      <p>A chemical reductant transfers an electron to a substrate when its HOMO lies above the substrate's LUMO; to change the driving force you must change the reductant. At an electrode the potentiostat sets the energy of the electrons in the metal or carbon: making the electrode potential more negative raises their energy until electron transfer to the analyte becomes favourable (reduction); making it more positive lowers it until the electrode can take an electron from the analyte (oxidation). Cyclic voltammetry (CV) sweeps this "reagent strength" linearly and records the current that flows.</p>
+
+      <h4>6.2 Reading a voltammogram</h4>
+      <ul>
+        <li><b>x axis:</b> the applied potential E (always quoted <i>vs</i> a reference). <b>y axis:</b> the current i.</li>
+        <li><b>Scan direction:</b> an arrow marks the start and direction of the first sweep. The potential goes from the initial potential to the <i>switching potential</i> and back. A sweep towards negative potentials is the cathodic trace (reductions), towards positive potentials the anodic trace (oxidations).</li>
+        <li><b>Scan rate v</b> (e.g. 100 mV/s): how fast the potential changes. It must always be reported.</li>
+        <li><b>Two plotting conventions exist</b> and papers rarely say which one they use: in the <b>IUPAC</b> convention positive potentials are to the right and oxidation (anodic) currents are positive; in the older <b>US/polarographic</b> convention negative potentials are to the right and reduction currents are positive. Look at the direction of the potential axis to tell them apart. This site (and its CV reader) uses IUPAC.</li>
+      </ul>
       ${SVG_CV}
-      <h4>Set-up</h4>
-      <ul>
-        <li><b>Three electrodes:</b> working electrode (glassy carbon 3 mm, or Pt disk), counter electrode (Pt wire), reference (Ag/AgCl or SCE with a salt bridge, or an Ag-wire pseudo-reference + ferrocene).</li>
-        <li><b>Solvent:</b> dry, HPLC-grade MeCN (or DMF, CH₂Cl₂), ideally the same solvent as the reaction.</li>
-        <li><b>Supporting electrolyte:</b> 0.1 M Bu₄NPF₆ (dried); it carries the current.</li>
-        <li><b>Analyte:</b> 1–5 mM.</li>
-        <li><b>Degas</b> with Ar or N₂ for 5–10 min and keep a blanket over the solution: O₂ is reduced around −0.8 V and hides reductions.</li>
-      </ul>
-      <h4>Procedure</h4>
+
+      <h4>6.3 Why the "duck" shape? Nernst equation and diffusion</h4>
+      <p>At the electrode surface the ratio of oxidised to reduced form follows the <b>Nernst equation</b>:</p>
+      <div class="formula">E = E°′ + (RT/nF) ln([Ox]/[Red])  →  at 25 °C: E = E°′ + (0.0592/n) log([Ox]/[Red])</div>
+      <p>E°′ is the <i>formal</i> potential under your conditions (solvent, electrolyte). Take the oxidation of ferrocene (Fc → Fc⁺) scanned positively:</p>
       <ol>
-        <li>Polish the working electrode (alumina 0.05 µm on a pad), rinse, dry.</li>
-        <li>Record a <b>blank</b> (solvent + electrolyte) over the window you need, to know the solvent limits and impurities.</li>
-        <li>Add the analyte, start from the rest potential and scan towards the process of interest (positive for oxidation, negative for reduction) at 100 mV/s. Record 2–3 cycles.</li>
-        <li>Vary the scan rate (25–1000 mV/s). For a diffusion-controlled process the peak current grows with √v (Randles–Ševčík: i_p = 2.69 × 10⁵ n^3/2 A D^1/2 C v^1/2); a reversible couple keeps ΔE_p and |i_pc/i_pa| ≈ 1.</li>
-        <li>Use iR compensation if the potentiostat offers it (important in CH₂Cl₂ or at high currents).</li>
-        <li>At the end add <b>ferrocene</b> (≈1 mM) and record again: report potentials vs Fc⁺/Fc and convert (MeCN: +0.38 V to SCE).</li>
+        <li>Far below E°′ nothing happens: the surface contains only Fc.</li>
+        <li>Approaching E°′, Nernst requires Fc⁺ at the surface, so Fc is oxidised and current flows. At E = E°′, [Fc⁺] = [Fc] at the surface.</li>
+        <li>Beyond E°′ almost all Fc at the surface is converted; the current is now limited by how fast fresh Fc <b>diffuses</b> from the bulk. The depleted zone (the <i>diffusion layer</i>) keeps growing, the supply slows, and the current passes through a maximum — the <b>anodic peak E_pa</b> — and then decays.</li>
+        <li>On the reverse sweep the Fc⁺ accumulated near the electrode is reduced back, giving the <b>cathodic peak E_pc</b>.</li>
       </ol>
-      <h4>Reading the CV</h4>
+      <p>The two peaks are separated because the species must diffuse to and from the electrode; their midpoint gives <b>E½ ≈ E°′</b>, the number used in photoredox tables.</p>
+      <div class="card tool" id="tool-cvsim"><h4>Try it: a simulated CV with its concentration profiles</h4>
+        <p class="hint">Reversible one-electron oxidation of 1 mM Fc-like analyte (E°′ = 0 V, D = 2 × 10⁻⁵ cm² s⁻¹, 3 mm electrode), computed by finite differences with the Nernst equation at the surface. Move the time slider to follow the sweep, and change the scan rate.</p>
+        <div class="grid c2">
+          <label class="field">Point of the sweep<input id="cs-t" type="range" min="0" max="1000" value="300"></label>
+          <label class="field">Scan rate<select id="cs-v"><option value="0.025">25 mV/s</option><option value="0.1" selected>100 mV/s</option><option value="0.4">400 mV/s</option><option value="1">1 V/s</option></select></label>
+        </div>
+        <div class="grid c2"><div id="cs-cv"></div><div id="cs-prof"></div></div>
+        <p class="hint" id="cs-info"></p>
+      </div>
+
+      <h4>6.4 Reversibility — two different meanings</h4>
       <ul>
-        <li><b>Reversible:</b> E½ = (E_pa + E_pc)/2, ΔE_p ≈ 59/n mV at 25 °C (in practice 60–90 mV), |i_pc/i_pa| ≈ 1. E½ is the thermodynamic potential.</li>
-        <li><b>Irreversible</b> (no return peak, typical for substrates that fragment after electron transfer: carboxylates, halides, NHPI esters): report E_p and E_p/2; E_p/2 is the better estimate for photoredox design, but it depends on scan rate and kinetics.</li>
-        <li>Always state solvent, electrolyte, electrodes, scan rate and reference.</li>
+        <li><b>Electrochemical reversibility</b> concerns the electron-transfer <i>kinetics</i> at the electrode. If transfer is fast, Nernst equilibrium is kept at every potential ("Nernstian" behaviour): ΔE_p = E_pa − E_pc ≈ <b>57 mV</b> for n = 1 at 25 °C (2.22 RT/F), and the peak is ~59 mV wide at half height. Slow transfer needs extra overpotential and ΔE_p grows.</li>
+        <li><b>Chemical reversibility</b> concerns the <i>stability</i> of the product: if the oxidised or reduced species reacts (fragments, loses a ligand, decarboxylates…), there is nothing left to convert back and the return peak shrinks or disappears (|i_pc/i_pa| &lt; 1).</li>
       </ul>
-      <p class="hint">Guides: Elgrishi et al., "A Practical Beginner's Guide to Cyclic Voltammetry", ${doiLink("10.1021/acs.jchemed.7b00361")}; Roth, Romero, Nicewicz on potentials of organic substrates, ${doiLink("10.1055/s-0035-1561297")}. The <a href="#cv">CV reader</a> extracts E_pa, E_pc, E½ and E_p/2 from your file.</p>
+      <p><b>Scan-rate study.</b> For a freely diffusing species the peak current follows the Randles–Ševčík equation</p>
+      <div class="formula">i_p = 0.446 n F A C (n F v D / RT)^½   — i_p grows linearly with √v</div>
+      <p>A straight line of i_p vs √v shows the analyte is freely diffusing (and gives D); a linear dependence on v instead points to species adsorbed on the electrode. The capacitive (background) current also grows linearly with v, so very fast scans have larger background.</p>
+      <div class="table-wrap"><table><thead><tr><th>What you see</th><th>What it usually means</th></tr></thead><tbody>
+        <tr><td>ΔE_p ≈ 57–70 mV, |i_pc/i_pa| ≈ 1, both independent of v</td><td>Reversible one-electron couple: report E½</td></tr>
+        <tr><td>ΔE_p grows with v, ratio ≈ 1</td><td>Slow electron transfer (quasi-reversible) or ohmic drop: check with ferrocene in the same cell</td></tr>
+        <tr><td>Return peak small at slow scans, recovering at fast scans</td><td>E<sub>r</sub>C<sub>i</sub>: the product reacts on the timescale of the experiment (rate constants can be extracted)</td></tr>
+        <tr><td>No return peak at any scan rate</td><td>Fast follow-up chemistry (typical for photoredox substrates): report E_p and E_p/2</td></tr>
+        <tr><td>One wave with ΔE_p ≈ 28.5 mV and double current</td><td>Two-electron process (second ET easier than the first); waves separate into two 57 mV couples when their E°′ differ by more than ~0.14 V</td></tr>
+        <tr><td>Peaks also present in electrolyte alone</td><td>Impurities, O₂, or adsorbed species: clean, degas, repolish</td></tr>
+      </tbody></table></div>
+
+      <h4>6.5 The electrochemical cell</h4>
+      ${SVG_CELL}
+      <ul>
+        <li><b>Working electrode (WE)</b> — where the reaction of interest happens. Glassy carbon (3 mm) or Pt for organic solvents; it must be inert in your potential window and have a clean, well-defined surface. Polish with alumina on a pad, rinse, sonicate in pure water, then "pretreat" by cycling in electrolyte until the background scans overlap. Repolish between analytes. A quick <i>rinse test</i> (move the electrode to fresh electrolyte after a measurement) reveals strong adsorption. Changing the electrode material is a good way to diagnose odd behaviour.</li>
+        <li><b>Reference electrode (RE)</b> — a stable potential to measure against; no current flows through it. SCE or Ag/AgCl behind a frit in aqueous work; in organic solvents Ag⁺/Ag (Ag wire in AgNO₃ solution) or a simple Ag-wire <b>pseudo-reference</b>. Non-aqueous references drift, so include an <b>internal standard — ferrocene — in every measurement</b> (not only at the end) and report potentials vs Fc⁺/Fc; use decamethylferrocene if Fc overlaps with or reacts with your compound. Convert to SCE afterwards (MeCN: +0.38 V).</li>
+        <li><b>Counter electrode (CE)</b> — closes the circuit; a Pt wire or carbon rod with a larger area than the WE. Whatever is reduced at the WE, something is oxidised at the CE: if its by-products interfere (e.g. THF polymerisation), place it in a fritted compartment.</li>
+      </ul>
+
+      <h4>6.6 The electrolyte solution</h4>
+      <ul>
+        <li><b>Solvent:</b> dissolves the analyte and a lot of electrolyte, is stable over the potential range (its "solvent window"), does not react with the analyte, and can be purified and dried. MeCN (wide window), DMF, CH₂Cl₂ are common; ideally use the reaction solvent.</li>
+        <li><b>Supporting electrolyte:</b> soluble, electrochemically inert, purifiable — typically 0.1–0.25 M Bu₄NPF₆ in MeCN (Bu₄NBF₄, Bu₄NClO₄ also used; more coordinating anions interact more with metal complexes). Because it is so concentrated, its purity matters.</li>
+        <li><b>Why so much electrolyte?</b> Charge must be balanced by ions moving in solution. A large excess of inert ions keeps the solution conductive and ensures that the analyte reaches the electrode by <b>diffusion only</b>, not by migration in the electric field. Convection is avoided by not stirring (and avoiding vibrations) during the scan. All the textbook equations assume diffusion-only transport.</li>
+        <li><b>Analyte:</b> ~1 mM (0.5–5 mM).</li>
+      </ul>
+
+      <h4>6.7 Step by step</h4>
+      <ol>
+        <li>Prepare dry electrolyte solution; polish and pretreat the WE.</li>
+        <li><b>Degas</b>: sparge with N₂ or Ar (several minutes), then lift the tubing above the liquid to keep the headspace inert without stirring the solution — or work in a glovebox. Dissolved O₂ gives a reduction wave (O₂/O₂•−, reversible in MeCN) and can destroy the reversibility of reduced analytes by electron transfer to O₂.</li>
+        <li>Record a <b>background scan</b> of electrolyte alone: only a small, featureless capacitive current should flow. Peaks here mean impurities or O₂.</li>
+        <li>Add analyte (and ferrocene). Read the <b>open circuit potential</b> (OCP, the potential at zero current); start the scan there.</li>
+        <li>Set initial, switching and final potentials, scan rate (start at 100 mV/s) and number of cycles; scan first towards the process of interest.</li>
+        <li>Repeat at several scan rates (e.g. 25–1000 mV/s) to test reversibility and diffusion.</li>
+        <li>Reference all potentials to the internal Fc⁺/Fc couple, then convert to SCE if needed.</li>
+      </ol>
+
+      <h4>6.8 Ohmic drop (uncompensated resistance)</h4>
+      <p>The solution between WE and RE has a resistance R_u; the potential felt by the analyte differs from the applied one by i·R_u. The tell-tale sign is a larger ΔE_p than expected for a couple known to be reversible (check ferrocene). Reduce it by (1) lowering the current (smaller WE, slower scans), (2) increasing the electrolyte concentration, and (3) bringing the RE tip close to the WE; many potentiostats can measure R_u and compensate it in real time.</p>
+
+      <h4>6.9 For photoredox: what number to take</h4>
+      <ul>
+        <li><b>Catalysts</b> (Ir, Ru, acridinium, cyanoarenes…) usually give reversible couples: use E½ for E_ox and E_red, then combine with E₀,₀ (chapter 3).</li>
+        <li><b>Substrates</b> often fragment after electron transfer (carboxylates lose CO₂, halides lose X⁻, NHPI esters fragment): no return wave. Report E_p and the half-peak potential E_p/2, which better approximates the thermodynamic value; but remember both depend on scan rate and follow-up kinetics (Roth, Romero, Nicewicz, ${doiLink("10.1055/s-0035-1561297")}).</li>
+        <li>Measure in the same solvent as the reaction whenever possible, and make sure every potential you compare is on the same reference.</li>
+      </ul>
+
+      <h4>6.10 Report and avoid</h4>
+      <div class="grid c2">
+        <div><b>Always report</b><ul><li>solvent, electrolyte and concentration</li><li>WE material and size, CE, RE (and internal standard)</li><li>scan rate, direction and number of cycles</li><li>reference used for the potentials and any conversion</li><li>plotting convention (IUPAC/US)</li></ul></div>
+        <div><b>Common mistakes</b><ul><li>measuring in air (O₂ wave, lost reversibility)</li><li>too little or impure electrolyte (ohmic drop, migration)</li><li>unpolished electrode, adsorption</li><li>adding ferrocene only at the end while the pseudo-reference drifts</li><li>mixing potentials vs Fc, SCE and Ag/AgCl without converting</li><li>reading E_p of an irreversible wave as if it were E½</li></ul></div>
+      </div>
+      <p class="hint">Upload your own data in the <a href="#cv">CV reader</a>: it splits cycles, finds peaks with a local baseline and returns E_pa, E_pc, E½, ΔE_p, |i_pc/i_pa| and E_p/2, referenced to SCE or to internal ferrocene.</p>
       ${quizHTML("cv")}` },
 
     { id: "photochem", title: "7 · Photophysical and photochemical measurements", html: `
@@ -380,6 +512,38 @@
     };
     ["e0-ox", "e0-red", "e0-e"].forEach(id => $(id).addEventListener("input", e0));
     e0();
+
+    // CV simulator
+    let frames = null, peaks = null;
+    const run = () => {
+      frames = simulateCV(+$("cs-v").value);
+      let a = 0, c = 0;
+      frames.forEach((fr, k) => { if (fr.i > frames[a].i) a = k; if (fr.i < frames[c].i) c = k; });
+      peaks = { a: frames[a], c: frames[c] };
+      draw();
+    };
+    const draw = () => {
+      const k = Math.min(frames.length - 1, Math.round(+$("cs-t").value / 1000 * (frames.length - 1)));
+      const fr = frames[k];
+      const fwd = frames.findIndex((x, j) => j > 0 && x.E < frames[j - 1].E);
+      RDBPlot.plot($("cs-cv"), {
+        series: [{ x: frames.slice(0, fwd).map(x => x.E), y: frames.slice(0, fwd).map(x => x.i), color: "var(--accent-2)" },
+                 { x: frames.slice(fwd - 1).map(x => x.E), y: frames.slice(fwd - 1).map(x => x.i), color: "var(--accent)" }],
+        points: [{ x: fr.E, y: fr.i, color: "var(--warn)", r: 6 }],
+        vlines: [{ x: 0, label: "E°′", color: "var(--muted)" }],
+        xLabel: "E (V vs E°′)", yLabel: "i (µA, oxidation +)", height: 280, legend: false
+      });
+      RDBPlot.plot($("cs-prof"), {
+        series: [{ x: fr.prof.map(p => p[0]), y: fr.prof.map(p => p[2]), color: "var(--ok)", label: "Red (Fc)" },
+                 { x: fr.prof.map(p => p[0]), y: fr.prof.map(p => p[1]), color: "var(--accent)", label: "Ox (Fc⁺)" }],
+        xLabel: "distance from electrode (µm)", yLabel: "concentration (mM)", yRange: [0, 1.08], height: 280
+      });
+      const dEp = (peaks.a.E - peaks.c.E) * 1000;
+      $("cs-info").innerHTML = `E = ${fr.E >= 0 ? "+" : ""}${fr.E.toFixed(3)} V, i = ${fr.i.toFixed(2)} µA · simulated E_pa = +${(peaks.a.E * 1000).toFixed(0)} mV, E_pc = ${(peaks.c.E * 1000).toFixed(0)} mV → E½ = ${((peaks.a.E + peaks.c.E) / 2 * 1000).toFixed(0)} mV, ΔE_p = ${dEp.toFixed(0)} mV, i_pa = ${peaks.a.i.toFixed(1)} µA. Try 4× the scan rate: i_p doubles (√v).`;
+    };
+    $("cs-v").addEventListener("input", run);
+    $("cs-t").addEventListener("input", draw);
+    run();
   }
 
   function render(root) {

@@ -58,7 +58,7 @@
         <div class="card stack">
           <h3>Redox events</h3>
           <div id="cv-out"><p class="hint">No data yet.</p></div>
-          <p class="hint">Reversible couple: E<sub>1/2</sub> = (E<sub>pa</sub> + E<sub>pc</sub>)/2; Nernstian ΔE<sub>p</sub> ≈ 59/n mV at 25 °C and |i<sub>pc</sub>/i<sub>pa</sub>| ≈ 1.
+          <p class="hint">Reversible couple: E<sub>1/2</sub> = (E<sub>pa</sub> + E<sub>pc</sub>)/2; Nernstian ΔE<sub>p</sub> ≈ 57/n mV at 25 °C (often 60–90 mV in practice because of ohmic drop) and |i<sub>pc</sub>/i<sub>pa</sub>| ≈ 1.
           Irreversible wave: E<sub>p</sub> and E<sub>p/2</sub> (potential at half peak current) are reported; E<sub>p/2</sub> is the better estimate of the thermodynamic potential for photoredox comparisons
           (Roth, Romero, Nicewicz, ${RDB.doiLink("10.1055/s-0035-1561297")}; Elgrishi et al., J. Chem. Educ. 2018, ${RDB.doiLink("10.1021/acs.jchemed.7b00361")}).</p>
         </div>
@@ -152,7 +152,7 @@
         if (ev.kind === "rev") {
           const e12 = (ev.a.E + ev.c.E) / 2, dEp = (ev.a.E - ev.c.E) * 1000;
           const ratio = Math.abs(ev.c.ipCorr / ev.a.ipCorr);
-          const quasi = dEp > 59 / n * 1.6 || ratio < 0.8 || ratio > 1.25;
+          const quasi = dEp > 57 / n * 1.6 || ratio < 0.8 || ratio > 1.25;
           return { type: quasi ? "quasi-reversible" : "reversible", Epa: ev.a.E, Epc: ev.c.E, E12: e12, dEp, ratio, Ep2: null, value: e12, valueType: "E1/2" };
         }
         const p = ev.a || ev.c;

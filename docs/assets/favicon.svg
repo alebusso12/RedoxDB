@@ -1,16 +1,16 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
   <rect width="64" height="64" rx="14" fill="#182033"/>
-  <!-- reversible cyclic voltammogram: anodic sweep (red) and cathodic return (blue) -->
-  <path d="M7 40 L 7 37 C 15 37, 19 35, 22 28 C 24.5 21, 28.5 20.5, 31 27 C 33 32, 38 34, 57 34 L 57 38"
-        fill="none" stroke="#ff8076" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M57 38 C 40 38, 33 39, 30 44 C 27.5 50.5, 23.5 51, 21 45 C 19 40.5, 15 40, 7 40"
-        fill="none" stroke="#8193ff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
-  <!-- the duck, floating on the anodic tail -->
-  <g transform="translate(0 -1)">
-    <path d="M37 27.5 C 37 22, 41 20.5, 45 21.5 L 49.5 22.5 C 52 21.5, 54.5 22.5, 55 25 C 55.5 29, 51 31.5, 45.5 31.5 C 40.5 31.5, 37 30.5, 37 27.5 Z" fill="#ffd166"/>
-    <circle cx="49" cy="15.5" r="5" fill="#ffd166"/>
-    <path d="M53.3 14.6 L 58.6 15.6 L 53.4 17.6 Z" fill="#ff9f43"/>
-    <circle cx="50.3" cy="14.3" r="1.05" fill="#182033"/>
-    <path d="M41.5 25 C 43.5 27.8, 47 28, 49 25.8" fill="none" stroke="#e8b444" stroke-width="1.4" stroke-linecap="round"/>
+  <!-- a reversible "duck-shaped" cyclic voltammogram: anodic sweep on top (red), cathodic return below (blue) -->
+  <path d="M7 41 C 13 41, 17 40, 21 35 C 25 29, 27 15, 34 13 C 40 11.5, 42 20, 46 23 C 50 26, 54 26.5, 58 26.5"
+        fill="none" stroke="#ff8076" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M58 26.5 L 58 31 C 51 31, 46 33, 41 38 C 36 43, 34 54, 27 54.5 C 21 55, 19 47, 14 44.5 C 11 43, 9 43, 7 43 L 7 41"
+        fill="none" stroke="#8193ff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- the duck, sitting inside the voltammogram -->
+  <g transform="translate(17.5 18.5) scale(0.62)">
+    <path d="M6 30 C 6 22, 12 19.5, 18 21 L 26 22.5 C 30 21, 34 22.5, 35 26.5 C 36 33, 29 37, 21 37 C 13 37, 6 35, 6 30 Z" fill="#ffd166"/>
+    <circle cx="25" cy="13" r="7.5" fill="#ffd166"/>
+    <path d="M31.5 11.5 L 39.5 13 L 31.6 16 Z" fill="#ff9f43"/>
+    <circle cx="27" cy="11.2" r="1.6" fill="#182033"/>
+    <path d="M13 27 C 16 31.5, 21.5 31.8, 24.5 28.3" fill="none" stroke="#e8b444" stroke-width="2.2" stroke-linecap="round"/>
   </g>
 </svg>
