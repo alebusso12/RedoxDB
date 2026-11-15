@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://*.supabase.co https://pubchem.ncbi.nlm.nih.gov https://doi.org; object-src 'none'; base-uri 'self'; form-action 'self'">
+<title>RedoxDB · Admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="assets/style.css">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+</head>
+<body>
+<div class="wrap">
+  <header class="topbar">
+    <div>
+      <h1 class="brand"><img src="assets/favicon.svg" alt="" width="36" height="36"><span><span class="red">Red</span><span class="ox">ox</span>DB · Admin</span></h1>
+      <p class="tagline">Review queue, entries and members</p>
+    </div>
+    <div class="top-actions">
+      <span class="badge" id="who" hidden></span>
+      <a class="btn small" href="index.html">Back to the site</a>
+      <button class="btn small ghost" id="theme" type="button">Theme: Auto</button>
+      <button class="btn small ghost" id="signout" type="button" hidden>Sign out</button>
+    </div>
+  </header>
+
+  <div id="gate" class="login" hidden>
+    <form class="card stack" novalidate>
+      <h2>Sign in</h2>
+      <label class="field">Email<input name="email" type="email" autocomplete="username" required></label>
+      <label class="field">Password<input name="password" type="password" autocomplete="current-password" required></label>
+      <div class="row"><button class="btn primary" type="submit">Sign in</button></div>
+      <p class="err" hidden role="alert"></p>
+    </form>
+  </div>
+
+  <div id="app-body" hidden>
+    <nav class="sections" aria-label="Admin sections">
+      <a href="#queue" data-sec="queue">Review queue <span class="badge" id="q-count"></span></a>
+      <a href="#entries" data-sec="entries">All entries</a>
+      <a href="#members" data-sec="members" id="nav-members" hidden>Members</a>
+      <a href="#audit" data-sec="audit" id="nav-audit" hidden>Activity log</a>
+    </nav>
+    <section data-view="queue" id="v-queue" hidden></section>
+    <section data-view="entries" id="v-entries" hidden></section>
+    <section data-view="members" id="v-members" hidden></section>
+    <section data-view="audit" id="v-audit" hidden></section>
+  </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/openchemlib@8.19.0/dist/openchemlib-full.js"></script>
+<script src="assets/config.js"></script>
+<script src="assets/common.js"></script>
+<script src="assets/database.js"></script>
+<script src="assets/submit.js"></script>
+<script src="assets/admin.js"></script>
+</body>
+</html>

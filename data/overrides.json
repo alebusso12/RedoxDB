@@ -1,0 +1,8 @@
+{
+  "4CzIPN": { "confidence": "high", "review_doi": "10.1021/jacs.8b08933", "e_ox": 1.52, "e_red": -1.21, "e_star_ox": -1.04, "e_star_red": 1.35 },
+  "Eosin Y": { "confidence": "high", "review_doi": "10.1021/acs.chemrev.6b00057" },
+  "Mes-Acr-Me+ ClO4-": { "confidence": "high", "review_doi": "10.1021/acs.chemrev.6b00057" },
+  "Mes-Acr-Me+ BF4-": { "confidence": "high", "review_doi": "10.1021/acs.chemrev.6b00057" },
+  "DDQ": { "confidence": "high", "review_doi": "10.1021/acs.chemrev.6b00057" },
+  "9,10-Dicyanoanthracene": { "confidence": "high", "review_doi": "10.1021/acs.chemrev.6b00057" }
+}

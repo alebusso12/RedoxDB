@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://*.supabase.co https://pubchem.ncbi.nlm.nih.gov https://doi.org; object-src 'none'; base-uri 'self'; form-action 'self'">
+<title>RedoxDB · Photoredox potentials</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="assets/style.css">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+</head>
+<body>
+<div class="wrap">
+  <header class="topbar">
+    <div>
+      <h1 class="brand"><img src="assets/favicon.svg" alt="" width="36" height="36"><span><span class="red">Red</span><span class="ox">ox</span>DB</span></h1>
+      <p class="tagline">Ground- and excited-state redox potentials for photoredox catalysis</p>
+    </div>
+    <div class="top-actions">
+      <span class="badge" id="who" hidden></span>
+      <a class="btn small" id="go-admin" href="admin.html" hidden>Admin</a>
+      <button class="btn small ghost" id="theme" type="button">Theme: Auto</button>
+      <button class="btn small ghost" id="signout" type="button" hidden>Sign out</button>
+    </div>
+  </header>
+
+  <div id="gate" class="login" hidden>
+    <form class="card stack" novalidate>
+      <h2>Sign in</h2>
+      <p class="hint">Access is by invitation only.</p>
+      <label class="field">Email<input name="email" type="email" autocomplete="username" required></label>
+      <label class="field">Password<input name="password" type="password" autocomplete="current-password" required></label>
+      <div class="row"><button class="btn primary" type="submit">Sign in</button></div>
+      <p class="err" hidden role="alert"></p>
+    </form>
+  </div>
+
+  <div id="app-body" hidden>
+    <nav class="sections" aria-label="Sections">
+      <a href="#home" data-sec="home">Home</a>
+      <a href="#db" data-sec="db">Database</a>
+      <a href="#map" data-sec="map">Redox map</a>
+      <a href="#estar" data-sec="estar">E* calculator</a>
+      <a href="#cv" data-sec="cv">CV reader</a>
+      <a href="#advisor" data-sec="advisor">Reactivity advisor</a>
+      <a href="#submit" data-sec="submit">Submit</a>
+    </nav>
+
+    <section id="sec-home" data-view="home" hidden>
+      <div class="stack">
+        <div class="kpis" id="home-stats"></div>
+        <div class="tiles">
+          <a class="card tile" href="#db"><h3>Database</h3><p>Search molecules by name, class, structure or potential window. Every value carries its solvent, reference conversion and DOI.</p></a>
+          <a class="card tile" href="#map"><h3>Redox map</h3><p>All photocatalysts on one potential axis: how strongly their excited states oxidise and reduce, next to the substrates you care about.</p></a>
+          <a class="card tile" href="#estar"><h3>E* calculator</h3><p>Excited-state potentials from E<sub>ox</sub>, E<sub>red</sub> and E<sub>0,0</sub> — or E<sub>0,0</sub> from absorption/emission spectra — with reference conversion.</p></a>
+          <a class="card tile" href="#cv"><h3>CV reader</h3><p>Load a voltammogram (data file or image) and get E<sub>pa</sub>, E<sub>pc</sub>, E<sub>1/2</sub>, ΔE<sub>p</sub> and reversibility, referenced to SCE or Fc⁺/Fc.</p></a>
+          <a class="card tile" href="#advisor"><h3>Reactivity advisor</h3><p>From your catalyst to the reactions it can drive — or from a target reaction to the catalysts that can close the cycle.</p></a>
+          <a class="card tile" href="#submit"><h3>Submit a value</h3><p>Propose a new molecule or a correction; a curator reviews it before it appears.</p></a>
+        </div>
+        <div class="notice info">All potentials are in <b>V vs SCE</b>. Conventions: <b>E*<sub>ox</sub></b> = E(PC<sup>•+</sup>/PC*) = E<sub>ox</sub> − E<sub>0,0</sub> (excited state as reductant); <b>E*<sub>red</sub></b> = E(PC*/PC<sup>•−</sup>) = E<sub>red</sub> + E<sub>0,0</sub> (excited state as oxidant).</div>
+      </div>
+    </section>
+
+    <section id="sec-db" data-view="db" hidden></section>
+    <section id="sec-map" data-view="map" hidden></section>
+    <section id="sec-estar" data-view="estar" hidden></section>
+    <section id="sec-cv" data-view="cv" hidden></section>
+    <section id="sec-advisor" data-view="advisor" hidden></section>
+    <section id="sec-submit" data-view="submit" hidden></section>
+  </div>
+  <footer>RedoxDB · values are transcribed from the literature; always check the cited source before relying on a number.</footer>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/openchemlib@8.19.0/dist/openchemlib-full.js"></script>
+<script src="assets/config.js"></script>
+<script src="assets/common.js"></script>
+<script src="assets/plot.js"></script>
+<script src="assets/database.js"></script>
+<script src="assets/estar.js"></script>
+<script src="assets/cv.js"></script>
+<script src="assets/advisor.js"></script>
+<script src="assets/submit.js"></script>
+<script src="assets/app.js"></script>
+</body>
+</html>
