@@ -148,21 +148,59 @@
     return v;
   }
 
-  function potCell(v, type) {
+  // Table cell: the mean value, with the number of experimental values when there are several,
+  // "c" when only computed values exist, "p" for peak potentials.
+  function potCell(m, q) {
+    const v = m[q];
     if (v == null) return '<td class="num">—</td>';
-    const cls = v < 0 ? "neg" : "pos";
-    const t = type && type !== "E1/2" ? ` <span class="hint" title="${esc(type)}">${type === "Ep" ? "p" : type === "calc" ? "c" : ""}</span>` : "";
-    return `<td class="num ${cls}">${fmt(v, 2)}${t}</td>`;
+    const st = RDB.measStats(m, q);
+    const type = m[q + "_type"];
+    let tag = "";
+    if (st.exp && st.exp.n > 1) tag = ` <span class="nbadge" title="mean of ${st.exp.n} experimental values${st.exp.sd != null ? ", SD " + st.exp.sd.toFixed(2) + " V" : ""}">${st.exp.n}</span>`;
+    else if (!st.exp && st.calc) tag = ' <span class="hint" title="computed value only">c</span>';
+    else if (type === "Ep") tag = ' <span class="hint" title="peak potential">p</span>';
+    const calcTip = st.calc ? ` title="computed: ${st.calc.mean.toFixed(2)} V (n = ${st.calc.n})"` : "";
+    return `<td class="num ${v < 0 ? "neg" : "pos"}"${calcTip}>${fmt(v, 2)}${tag}</td>`;
   }
   function row(m) {
     return `<tr data-id="${esc(m.id)}">
       <td><div class="struct">${RDB.structHTML(m.smiles, 132, 72)}</div></td>
       <td><b>${esc(m.name)}</b>${m.aliases && m.aliases.length ? `<div class="hint">${esc(m.aliases.slice(0, 2).join(", "))}</div>` : ""}</td>
       <td>${catBadge(m)}</td>
-      ${potCell(m.e_ox, m.e_ox_type)}${potCell(m.e_red, m.e_red_type)}
+      ${potCell(m, "e_ox")}${potCell(m, "e_red")}
       <td class="num">${fmt(m.e00, 2)}</td>
-      ${potCell(m.e_star_ox)}${potCell(m.e_star_red)}
+      ${potCell(m, "e_star_ox")}${potCell(m, "e_star_red")}
       <td>${confBadge(m.confidence)}</td></tr>`;
+  }
+
+  const Q_LABEL = {
+    e_ox: "E<sub>ox</sub> = E(M<sup>•+</sup>/M)", e_red: "E<sub>red</sub> = E(M/M<sup>•−</sup>)", e00: "E<sub>0,0</sub> (eV)",
+    e_star_ox: "E*<sub>ox</sub> = E(M<sup>•+</sup>/M*)", e_star_red: "E*<sub>red</sub> = E(M*/M<sup>•−</sup>)"
+  };
+  /* Every reported value, grouped by quantity: mean ± SD of the experimental values used in the average,
+     the computed mean, and one row per value with its method highlighted. */
+  function valuesHTML(m) {
+    const qs = ["e_ox", "e_red", "e00", "e_star_ox", "e_star_red"].filter(q => (m.meas || []).some(r => r.quantity === q));
+    if (!qs.length) return '<p class="hint">No individual values recorded.</p>';
+    const pm = (st, unit) => st ? `${(st.mean > 0 && unit === "V" ? "+" : "") + st.mean.toFixed(2)}${st.sd != null ? " ± " + st.sd.toFixed(2) : ""} ${unit} <span class="hint">(n = ${st.n}${st.n > 1 ? `, range ${st.min.toFixed(2)} to ${st.max.toFixed(2)}` : ""})</span>` : "—";
+    return qs.map(q => {
+      const st = RDB.measStats(m, q), unit = q === "e00" ? "eV" : "V";
+      const rows = st.all.slice().sort((a, b) => (a.kind === b.kind ? 0 : a.kind === "experimental" ? -1 : 1) || a.value - b.value);
+      return `<div class="valgroup"><h4>${Q_LABEL[q]}</h4>
+        <div class="kpis" style="margin-bottom:8px">
+          <div class="kpi"><div class="lab">experimental average</div><div class="val">${pm(st.exp, unit)}</div></div>
+          ${st.calc ? `<div class="kpi"><div class="lab">computed average</div><div class="val">${pm(st.calc, unit)}</div></div>` : ""}
+        </div>
+        <div class="table-wrap"><table class="vals"><thead><tr><th class="num">Value</th><th>Type</th><th>Method</th><th>Conditions</th><th>Source</th><th>Check</th></tr></thead><tbody>
+        ${rows.map(r => `<tr class="${r.in_average === false && r.kind === "experimental" ? "excluded" : ""}">
+          <td class="num"><b>${(r.value > 0 && unit === "V" ? "+" : "") + Number(r.value).toFixed(2)}</b></td>
+          <td>${r.kind === "computational" ? '<span class="badge calc">computed</span>' : '<span class="badge exp">experimental</span>'}<div class="hint">${esc(r.value_type || "")}</div></td>
+          <td class="method">${esc(r.method || "—")}</td>
+          <td class="hint">${esc([r.solvent, r.electrolyte, r.ref_original ? "measured vs " + r.ref_original : "", r.conversion].filter(Boolean).join(" · "))}</td>
+          <td class="hint">${esc(r.source || "")}${r.doi ? "<br>" + doiLink(r.doi) : ""}${r.notes ? `<br><i>${esc(r.notes)}</i>` : ""}</td>
+          <td>${confBadge(r.confidence)}${r.in_average === false && r.kind === "experimental" ? '<div class="hint">not in average</div>' : ""}</td></tr>`).join("")}
+        </tbody></table></div></div>`;
+    }).join("");
   }
 
   function showDetail(m) {
@@ -188,15 +226,16 @@
             ${prop("E<sub>0,0</sub>", m.e00 != null ? fmt(m.e00, 2) + " eV" + (m.excited_state ? " (" + esc(m.excited_state) + ")" : "") : "")}
             ${prop("Lifetime", m.tau_ns != null ? fmt(m.tau_ns, m.tau_ns < 10 ? 1 : 0) + " ns" : "")}
             ${prop("λ<sub>abs</sub> / λ<sub>em</sub>", m.lambda_abs_nm || m.lambda_em_nm ? `${m.lambda_abs_nm || "—"} / ${m.lambda_em_nm || "—"} nm` : "")}
-            ${prop("E<sub>ox</sub> type", esc(m.e_ox_type))}${prop("E<sub>red</sub> type", esc(m.e_red_type))}
             ${prop("Activated group", esc((m.functional_groups || []).join("; ")))}
             ${prop("Solvent", esc(m.solvent))}${prop("Electrolyte", esc(m.electrolyte))}
             ${prop("Original reference", esc(m.ref_original))}${prop("Conversion", esc(m.conversion))}
-            ${prop("Source (DOI)", doiLink(m.doi))}${prop("Review", m.review_doi ? doiLink(m.review_doi) : "")}
             ${prop("Notes", esc(m.notes))}
           </dl>
         </div>
       </div>
+      <h3 style="margin-top:18px">All reported values</h3>
+      <p class="hint">The value shown for this molecule is the average of the experimental values marked as checked or medium reliability; low-reliability values are listed but not averaged. Computed values are averaged separately. Methods differ (E1/2 of reversible waves, E_p or E_p/2 of irreversible ones, DFT), so compare them with care.</p>
+      ${valuesHTML(m)}
       <div class="row end" style="margin-top:14px">
         <a class="btn" href="#advisor?pc=${encodeURIComponent(m.id)}">Use in advisor</a>
         <a class="btn" href="#submit?fix=${encodeURIComponent(m.id)}">Suggest a correction</a>

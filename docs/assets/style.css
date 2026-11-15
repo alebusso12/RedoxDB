@@ -210,3 +210,20 @@ footer { margin-top: 40px; color: var(--muted); font-size: .8rem; }
 .quiz .opt.right { background: var(--ok-soft); border-color: var(--ok); }
 .quiz .opt.chosen-wrong { background: var(--bad-soft); border-color: var(--bad); }
 .quiz .explain { margin: 6px 0 0; font-size: .9rem; color: var(--muted); }
+
+/* Tools sub-navigation */
+.subnav { display: flex; gap: 6px; flex-wrap: wrap; margin: -6px 0 16px; }
+.subnav a { padding: 6px 12px; border-radius: 999px; border: 1px solid var(--border); text-decoration: none; color: var(--muted); font-size: .88rem; font-weight: 500; background: var(--surface); }
+.subnav a.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+/* reported values */
+.nbadge { display: inline-block; min-width: 1.4em; padding: 0 4px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-size: .7rem; font-weight: 700; text-align: center; font-family: var(--sans); }
+.badge.exp { background: var(--ok-soft); color: var(--ok); }
+.badge.calc { background: color-mix(in srgb, var(--pc) 15%, transparent); color: var(--pc); }
+table.vals td.method { font-weight: 600; max-width: 260px; }
+table.vals tr.excluded td { opacity: .55; }
+.valgroup { margin-top: 14px; }
+.valgroup h4 { margin: 0 0 6px; }
+.modal { max-width: 1050px; }
+.valgroup .kpis { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+.valgroup .kpi .val { font-size: 1rem; }

@@ -10,6 +10,8 @@ photocatalysts and substrates, with tools to design and choose catalysts. Inspir
 | --- | --- |
 | **Database** | Search by name/alias/CAS/class/activated group, filter by type, kind, class, solvent, reliability and potential window; exact, substructure and similarity search on SMILES (OpenChemLib); detail card with structure, all potentials, E0,0, τ, λ, conversion and DOI; CSV export. |
 | **Redox map** | Every photocatalyst on one potential axis (E\*ox and E\*red), with a substrate or a potential overlaid. |
+| **Learn** | Photoredox 101: mechanism, ground/excited-state potentials, consequences of light, choosing a catalyst, cyclic voltammetry (after Elgrishi et al. 2018, with a finite-difference CV simulator), photophysical measurements, reaction design; quizzes. |
+| **Tools** | E\* calculator, CV reader, reference-electrode converter (incl. internal ferrocene), photon energy/flux and diffusion limit, Stern–Volmer fitting, Randles–Ševčík scan-rate analysis. |
 | **E\* calculator** | E\*ox = E_ox − E0,0 and E\*red = E_red + E0,0 from data vs any reference; E0,0 from eV, kcal/mol, wavelengths, or the crossing of uploaded absorption/emission spectra; ΔG of photoinduced electron transfer to a quencher (optional Rehm–Weller Coulomb term); nearest catalysts in the database. |
 | **CV reader** | Potentiostat exports (CSV/TXT/…; column and unit detection) or an **image** of a CV (axis calibration + automatic colour tracing). Splits cycles, finds peaks with a local baseline, pairs them into couples: E_pa, E_pc, E1/2, ΔEp, i_pc/i_pa, Ep/2 for irreversible waves; reference conversion or internal ferrocene; sends values to the E\* calculator. |
 | **Reactivity advisor** | *Catalyst → reactions*: ranks a library of literature reaction types by the thermodynamics of the full cycle (both quenching pathways, catalyst turnover included), and lists database substrates the catalyst can oxidise/reduce. *Reaction → catalysts*: from a library reaction or a custom substrate (+ optional sacrificial partner), ranks all catalysts, with chemoselectivity penalty and visible-light filter. |
@@ -19,6 +21,14 @@ photocatalysts and substrates, with tools to design and choose catalysts. Inspir
 All potentials are stored **in V vs SCE**. Conventions: E\*ox = E(PC•+/PC\*), E\*red = E(PC\*/PC•−).
 
 ## Data
+
+Every molecule has a list of **individual values** (`measurements`: quantity, value, experimental or computational,
+method, conditions, source DOI, reliability). The value shown for a molecule is the **mean of its experimental values**
+with checked or medium reliability; low-reliability values are listed but not averaged; computed values are averaged
+separately. Sources transcribed and checked so far: Roth, Romero, Nicewicz, Synlett 2016 (E_p/2 for ~170 compounds plus
+B3LYP and M06-2X values from the SI; `tools/sources_roth2016.py`) and Prier, Rankic, MacMillan, Chem. Rev. 2013, Table 1.
+`python3 tools/build.py` also writes `data/measurements.json`. Supabase: run `supabase/migration_002_measurements.sql`
+once, then use *Import literature data* on the admin page of a local copy.
 
 `data/raw/*.json` are the literature batches; `python3 tools/build.py` merges them into `data/molecules.json`
 and `supabase/seed.sql` (`data/overrides.json` holds curator-checked corrections; `data/reactions.json` is the

@@ -30,28 +30,46 @@
      Rows carry an import_key, so importing twice adds nothing. */
   async function localBatch() {
     try {
-      const [m, r] = await Promise.all([fetch("../data/molecules.json", { cache: "no-cache" }), fetch("../data/reactions.json", { cache: "no-cache" })]);
-      if (!m.ok || !r.ok) return null;
-      return { mols: await m.json(), rxns: await r.json() };
+      const get = async f => { const r = await fetch("../data/" + f, { cache: "no-cache" }); return r.ok ? r.json() : null; };
+      const [mols, rxns, meas] = await Promise.all([get("molecules.json"), get("reactions.json"), get("measurements.json")]);
+      if (!mols || !rxns) return null;
+      let nMeas = 0;
+      if (meas) {
+        const { count } = await sb.from("measurements").select("id", { count: "exact", head: true });
+        nMeas = count || 0;
+      }
+      return { mols, rxns, meas: meas || [], dbMeas: nMeas };
     } catch (e) { return null; }
   }
   async function importBatch(batch, out) {
-    const known = new Set(all.map(m => m.import_key).filter(Boolean));
-    const rows = batch.mols.filter(m => !known.has(m.import_key)).map(m => {
+    // 1) molecules: insert new ones, refresh literature values (averages) of existing literature entries
+    const rows = batch.mols.map(m => {
       const o = {};
       RDB.MOL_FIELDS.concat(["status", "import_key"]).forEach(k => { o[k] = m[k] ?? null; });
       o.aliases = o.aliases || []; o.functional_groups = o.functional_groups || [];
       return o;
     });
-    let done = 0;
     for (let i = 0; i < rows.length; i += 100) {
-      const { error } = await sb.from("molecules").upsert(rows.slice(i, i + 100), { onConflict: "import_key", ignoreDuplicates: true });
-      if (error) { out.innerHTML = `<span class="err">Stopped after ${done}: ${esc(error.message)}</span>`; return; }
-      done += Math.min(100, rows.length - i);
-      out.textContent = `Imported ${done} / ${rows.length} molecules…`;
+      const { error } = await sb.from("molecules").upsert(rows.slice(i, i + 100), { onConflict: "import_key" });
+      if (error) { out.innerHTML = `<span class="err">Molecules stopped at ${i}: ${esc(error.message)}</span>`; return; }
+      out.textContent = `Molecules ${Math.min(i + 100, rows.length)} / ${rows.length}…`;
+    }
+    // 2) measurements, linked by import_key → id
+    const ids = new Map((await RDB.selectAll("molecules")).map(m => [m.import_key, m.id]));
+    const mrows = batch.meas.filter(r => ids.has(r.molecule_key)).map(r => {
+      const o = { molecule_id: ids.get(r.molecule_key) };
+      ["quantity", "value", "value_type", "kind", "method", "solvent", "electrolyte", "ref_original", "conversion", "doi", "source", "confidence", "in_average", "notes", "import_key"].forEach(k => { o[k] = r[k] ?? null; });
+      if (o.in_average == null) o.in_average = true;
+      o.status = "approved";
+      return o;
+    });
+    for (let i = 0; i < mrows.length; i += 200) {
+      const { error } = await sb.from("measurements").upsert(mrows.slice(i, i + 200), { onConflict: "import_key" });
+      if (error) { out.innerHTML = `<span class="err">Values stopped at ${i}: ${esc(error.message)}</span>`; return; }
+      out.textContent = `Values ${Math.min(i + 200, mrows.length)} / ${mrows.length}…`;
     }
     const { error } = await sb.from("reactions").upsert(batch.rxns.map(r => ({ id: r.id, name: r.name, data: r, status: "approved" })), { onConflict: "id" });
-    out.innerHTML = error ? `<span class="err">Reactions: ${esc(error.message)}</span>` : `Done: ${done} new molecules, ${batch.rxns.length} reaction types.`;
+    out.innerHTML = error ? `<span class="err">Reactions: ${esc(error.message)}</span>` : `Done: ${rows.length} molecules and ${mrows.length} values synchronised, ${batch.rxns.length} reaction types.`;
     await refresh();
   }
 
@@ -61,9 +79,10 @@
     const nw = pend.filter(m => !m.corrects_id), fixes = pend.filter(m => m.corrects_id);
     const batch = RDB.remote && ctx.role === "superadmin" ? await localBatch() : null;
     const missing = batch ? batch.mols.filter(m => !all.some(x => x.import_key === m.import_key)).length : 0;
+    const measMissing = batch ? Math.max(0, batch.meas.length - batch.dbMeas) : 0;
     el.innerHTML = `<div class="stack">
       ${!RDB.remote ? '<p class="notice">Local preview: the queue is read-only until the site is connected to Supabase.</p>' : ""}
-      ${batch && (missing || !all.length) ? `<div class="notice info row"><span>${missing} literature molecules from <code>data/molecules.json</code> are not in the database yet.</span><span class="spacer"></span><button class="btn small primary" id="imp-go">Import literature data</button><span id="imp-out" class="hint"></span></div>` : ""}
+      ${batch && (missing || measMissing || !all.length) ? `<div class="notice info row"><span>Local literature data: ${missing} new molecules and ${measMissing} individual values are not in the database yet (existing literature entries get their averages refreshed).</span><span class="spacer"></span><button class="btn small primary" id="imp-go">Import literature data</button><span id="imp-out" class="hint"></span></div>` : ""}
       <p class="hint">${nw.length} new or incomplete entries, ${fixes.length} corrections. Entries without any potential (from the literature import) also wait here until someone completes them.</p>
       <div class="row"><label class="check"><input type="checkbox" id="q-all"> select all</label>
         <button class="btn small" id="q-approve">Approve selected</button><button class="btn small danger" id="q-reject">Reject selected</button></div>

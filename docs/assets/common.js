@@ -61,11 +61,139 @@
   const svgCache = new Map();
   const rawCache = new Map();
   let svgSeq = 0;
+  const METAL_RE = /\[(Ir|Ru|Os|Cu|Fe|Cr|Co|Ni|Pt|Pd|Au|Ag|Zr|Ce|Re|W|Zn|Mg|U|Ti|Cd|Mo|Mn|V|Rh|Eu|La|Sm)\b[^\]]*\]/;
+  function isMetalIon(f) { return METAL_RE.test(f) && (f.match(/[A-Za-z]/g) || []).length <= 6; }
+  /* Fragments that are only counter-ions: PF6-, BF4-, ClO4-, OTf-, alkali cations, tetraalkylammonium.
+     Halide anions count as ligands only when there are three or more of them (e.g. [CeCl6]2-). */
+  function isCounterIon(frag, halideCount) {
+    if (METAL_RE.test(frag)) return false;
+    if (/^\[(Na|K|Li|Cs)\+\]$/.test(frag)) return true;
+    if (/^\[(Cl|Br|I|F)-\]$/.test(frag)) return halideCount < 3;
+    if (/\[N\+\]/.test(frag) && !/[cn]/.test(frag.replace(/\[N\+\]/g, ""))) return true;   // R4N+
+    const heavy = (frag.match(/Cl|Br|[BCNOFPSI]/g) || []).length;
+    if (!/[cC]/.test(frag.replace(/Cl/g, ""))) return heavy <= 7;                // PF6-, BF4-, ClO4-, SbF6-
+    return heavy <= 9 && /S/.test(frag) && /F/.test(frag) && !/c/.test(frag);  // OTf-
+  }
+
+  /* Metal complexes are stored as dot-separated fragments (metal ion + ligands + counter-ions). To draw the
+     whole complex, each ligand gets 2D coordinates, its donor atoms are found (anionic C/N/O/S, pyridine-type N,
+     phosphine P, nitrile N), chelating ligands are put in their syn (chelating) conformation, and the ligands are
+     arranged around the metal, which is joined to the donors with metal–ligand bonds. Macrocycles (porphyrins,
+     phthalocyanines) keep the metal at the centre of their four N donors. */
+  function buildComplex(smiles) {
+    const K = window.OCL.Molecule;
+    const all = smiles.split(".").filter(Boolean);
+    // carbonyl complexes (e.g. Re(bpy)(CO)3Cl) carry their halide as a ligand
+    const halides = all.filter(f => /^\[(Cl|Br|I|F)-\]$/.test(f)).length + (all.some(f => f === "[C-]#[O+]") ? 3 : 0);
+    const frags = all.filter(f => !isCounterIon(f, halides));
+    const metalFrag = frags.find(isMetalIon);
+    const ligs = frags.filter(f => f !== metalFrag);
+    if (!metalFrag || !ligs.length) return null;
+    const metalNo = K.fromSmiles(metalFrag).getAtomicNo(0);
+    const info = ligs.map(f => {
+      const L = K.fromSmiles(f);
+      L.inventCoordinates();
+      L.ensureHelperArrays(K.cHelperRings);
+      const n = L.getAllAtoms(), cand = [];
+      for (let a = 0; a < n; a++) {
+        const z = L.getAtomicNo(a), q = L.getAtomCharge(a), conn = L.getConnAtoms(a);
+        if (q < 0 && [6, 7, 8, 16, 9, 17, 35, 53].includes(z)) cand.push(a);
+        else if (z === 7 && L.isAromaticAtom(a) && L.getAllHydrogens(a) === 0 && conn === 2) cand.push(a);
+        else if (z === 15 && conn === 3) cand.push(a);
+        else if (z === 7 && conn === 1 && L.getConnBondOrder(a, 0) === 3) cand.push(a);
+      }
+      // acac-type ligands: the anionic O and the carbonyl O both bind
+      if (cand.length === 1 && L.getAtomicNo(cand[0]) === 8) {
+        for (let a = 0; a < n; a++) if (a !== cand[0] && L.getAtomicNo(a) === 8 && L.getConnAtoms(a) === 1 && L.getConnBondOrder(a, 0) === 2) cand.push(a);
+      }
+      let donors = cand.slice(0, 1), best = 99;
+      const macro = cand.length >= 4 && n > 20 && cand.filter(a => L.getAtomicNo(a) === 7).length >= 4 && L.getAtomRingSize(cand[0]) >= 5 && (() => {
+        const Ns = cand.filter(a => L.getAtomicNo(a) === 7);
+        return Ns.some((x, i) => Ns.slice(i + 1).some(y => L.getPathLength(x, y) >= 5));
+      })();
+      if (macro) donors = cand.filter(a => L.getAtomicNo(a) === 7).slice(0, 4);
+      else for (let i = 0; i < cand.length; i++) for (let j = i + 1; j < cand.length; j++) {
+        const p = L.getPathLength(cand[i], cand[j]);
+        if (p >= 2 && p < best && p <= 8) { best = p; donors = [cand[i], cand[j]]; }
+      }
+      if (!macro && donors.length === 2) makeSyn(L, donors[0], donors[1]);
+      return { L, donors, macro };
+    });
+    let bl = 0, nb = 0;
+    info.forEach(({ L }) => { for (let b = 0; b < L.getAllBonds(); b++) { const a1 = L.getBondAtom(0, b), a2 = L.getBondAtom(1, b); bl += Math.hypot(L.getAtomX(a1) - L.getAtomX(a2), L.getAtomY(a1) - L.getAtomY(a2)); nb++; } });
+    bl = bl / nb || 1;
+    const M = new K(256, 256);
+    const mi = M.addAtom(metalNo);
+    M.setAtomX(mi, 0); M.setAtomY(mi, 0);
+    const outer = info.filter(x => !x.macro);
+    info.forEach(({ L, donors, macro }) => {
+      const n = L.getAllAtoms();
+      let cx = 0, cy = 0;
+      for (let a = 0; a < n; a++) { cx += L.getAtomX(a); cy += L.getAtomY(a); }
+      cx /= n; cy /= n;
+      const mx = donors.length ? donors.reduce((t, a) => t + L.getAtomX(a), 0) / donors.length : cx;
+      const my = donors.length ? donors.reduce((t, a) => t + L.getAtomY(a), 0) / donors.length : cy;
+      let rot = 0, tx = 0, ty = 0;
+      if (!macro) {
+        const k = outer.indexOf(outer.find(o => o.L === L));
+        const ang = Math.PI / 2 + 2 * Math.PI * k / Math.max(1, outer.length);
+        rot = ang - Math.atan2(cy - my, cx - mx);
+        const dd = donors.length > 1 ? Math.hypot(L.getAtomX(donors[0]) - L.getAtomX(donors[1]), L.getAtomY(donors[0]) - L.getAtomY(donors[1])) : 0;
+        const r = donors.length > 1 ? Math.sqrt(Math.max(0.2 * bl * bl, (1.75 * bl) ** 2 - (dd / 2) ** 2)) : 1.75 * bl;
+        tx = r * Math.cos(ang); ty = r * Math.sin(ang);
+      }
+      const c = Math.cos(rot), s = Math.sin(rot), map = [];
+      for (let a = 0; a < n; a++) {
+        const x = L.getAtomX(a) - mx, y = L.getAtomY(a) - my;
+        const na = M.addAtom(L.getAtomicNo(a));
+        M.setAtomX(na, x * c - y * s + tx); M.setAtomY(na, x * s + y * c + ty);
+        M.setAtomCharge(na, donors.includes(a) ? 0 : L.getAtomCharge(a));
+        // an anionic donor bound to the metal must not get an implicit H (e.g. Cl–M, not HCl–M)
+        if (donors.includes(a) && L.getAtomCharge(a) < 0) M.setAtomAbnormalValence(na, L.getOccupiedValence(a));
+        map[a] = na;
+      }
+      for (let b = 0; b < L.getAllBonds(); b++) {
+        const nb2 = M.addBond(map[L.getBondAtom(0, b)], map[L.getBondAtom(1, b)]);
+        M.setBondType(nb2, L.getBondType(b));
+      }
+      donors.forEach(d => { const b = M.addBond(mi, map[d]); M.setBondType(b, K.cBondTypeMetalLigand); });
+    });
+    return M;
+  }
+  // Put the two donor atoms of a chelating ligand on the same side (e.g. bpy drawn cis, not anti).
+  function makeSyn(L, d1, d2) {
+    const nbrs = a => { const r = []; for (let i = 0; i < L.getConnAtoms(a); i++) r.push(L.getConnAtom(a, i)); return r; };
+    let path = null;
+    for (const a of nbrs(d1)) for (const b of nbrs(a)) if (b !== d1 && nbrs(b).includes(d2)) path = [a, b];
+    if (!path) return;
+    const [a, b] = path;
+    const ax = L.getAtomX(a), ay = L.getAtomY(a), bx = L.getAtomX(b), by = L.getAtomY(b);
+    const side = (x, y) => Math.sign((bx - ax) * (y - ay) - (by - ay) * (x - ax));
+    if (side(L.getAtomX(d1), L.getAtomY(d1)) === side(L.getAtomX(d2), L.getAtomY(d2))) return;
+    const seen = new Set([b]), st = [b];
+    while (st.length) { const x = st.pop(); for (const y of nbrs(x)) if (y !== a && !seen.has(y)) { seen.add(y); st.push(y); } }
+    if (seen.has(a)) return;
+    const dx = bx - ax, dy = by - ay, l2 = dx * dx + dy * dy;
+    seen.forEach(x => {
+      const px = L.getAtomX(x) - ax, py = L.getAtomY(x) - ay, t = (px * dx + py * dy) / l2;
+      L.setAtomX(x, ax + 2 * t * dx - px); L.setAtomY(x, ay + 2 * t * dy - py);
+    });
+  }
+
   function rawSVG(smiles) {
     if (rawCache.has(smiles)) return rawCache.get(smiles);
     let out = null;
     try {
-      const m = window.OCL.Molecule.fromSmiles(smiles);
+      let m = null;
+      if (smiles.indexOf(".") >= 0 && METAL_RE.test(smiles)) m = buildComplex(smiles);
+      if (!m) {
+        // plain molecule (drop counter-ions so salts are drawn as the organic ion)
+        const parts = smiles.split(".");
+        const halides = parts.filter(f => /^\[(Cl|Br|I|F)-\]$/.test(f)).length;
+        const keep = parts.length > 1 ? parts.filter(f => !isCounterIon(f, halides)) : parts;
+        m = window.OCL.Molecule.fromSmiles((keep.length ? keep : parts).join("."));
+        m.inventCoordinates();
+      }
       const big = m.getAllAtoms() > 45;
       const s = m.toSVG(big ? 1400 : 700, big ? 1000 : 500, undefined, {
         autoCrop: true, autoCropMargin: 10, suppressChiralText: true, suppressCIPParity: true, suppressESR: true, noStereoProblem: true
@@ -93,42 +221,7 @@
     svgCache.set(key, out);
     return out;
   }
-  /* Metal complexes are stored as dot-separated fragments (metal ion, ligands, counter-ions). Drawn as one
-     molecule they scatter, and octahedral coordinates overlap, so they are shown as a metal label plus each
-     distinct ligand with its multiplicity; counter-ions are left out of the drawing. */
-  const METAL_RE = /\[(Ir|Ru|Os|Cu|Fe|Cr|Co|Ni|Pt|Pd|Au|Ag|Zr|Ce|Re|W|Zn|Mg|U|Ti|Cd|Mo|Mn|V|Rh|Eu|La|Sm)\b[^\]]*\]/;
-  function isCounterIon(frag) {
-    if (METAL_RE.test(frag)) return false;
-    const heavy = (frag.match(/Cl|Br|[BCNOFPSI]/g) || []).length;
-    if (!/[cC]/.test(frag.replace(/Cl/g, ""))) return heavy <= 7;                // PF6-, BF4-, Cl-, ClO4-, SbF6-
-    return heavy <= 9 && /S/.test(frag) && /F/.test(frag) && !/c/.test(frag);  // OTf-, NTf2-like
-  }
-  function complexParts(smiles) {
-    if (!smiles || smiles.indexOf(".") < 0 || !METAL_RE.test(smiles)) return null;
-    const frags = smiles.split(".").filter(f => f && !isCounterIon(f));
-    const metals = frags.filter(f => METAL_RE.test(f) && (f.match(/[A-Za-z]/g) || []).length <= 6);
-    const ligands = frags.filter(f => !metals.includes(f));
-    if (!metals.length || !ligands.length) return null;
-    const groups = new Map();
-    ligands.forEach(f => {
-      let k = f;
-      try { k = window.OCL.Molecule.fromSmiles(f).getIDCode(); } catch (e) { /* keep text key */ }
-      const g = groups.get(k) || { smiles: f, n: 0 };
-      g.n++; groups.set(k, g);
-    });
-    const metal = metals[0].match(METAL_RE)[1];
-    const charge = (metals[0].match(/\+(\d*)/) || [])[0] || "";
-    return { metal, charge, ligands: [...groups.values()].sort((a, b) => b.n - a.n) };
-  }
-  function structHTML(smiles, w = 180, h = 120) {
-    const c = window.OCL ? complexParts(smiles) : null;
-    if (!c) return molSVG(smiles, w, h);
-    const n = Math.min(c.ligands.length, 3);
-    const lw = Math.floor((w - 34) / n) - 4, lh = h - 6;
-    return `<div class="complex" title="metal centre + ligands (counter-ions not drawn)">
-      <span class="metal">${esc(c.metal)}${c.charge ? `<sup>${esc(c.charge.replace("+", ""))}+</sup>` : ""}</span>
-      ${c.ligands.slice(0, 3).map(l => `<span class="lig">${molSVG(l.smiles, lw, lh - (l.n > 1 ? 12 : 0), 1.2)}${l.n > 1 ? `<b>×${l.n}</b>` : ""}</span>`).join("")}</div>`;
-  }
+  function structHTML(smiles, w = 180, h = 120) { return molSVG(smiles, w, h); }
   function molFromSmiles(smiles) { try { return window.OCL.Molecule.fromSmiles(smiles); } catch (e) { return null; } }
 
   // ---------- backend: data ----------
@@ -147,14 +240,52 @@
   }
   async function loadMolecules(opts = {}) {
     if (sb) {
-      let q = sb.from("molecules").select("*").order("name");
-      if (!opts.all) q = q.eq("status", "approved");
-      const { data, error } = await q.range(0, 9999);
-      if (error) throw error;
-      return data;
+      return selectAll("molecules", q => opts.all ? q.order("name") : q.eq("status", "approved").order("name"));
     }
     const data = (await fetchLocal("../data/molecules.json")).map(normMol);
     return opts.all ? data : data.filter(m => m.status === "approved");
+  }
+  // Supabase returns at most 1000 rows per request: page through larger tables.
+  async function selectAll(table, filter) {
+    const out = [];
+    for (let from = 0; ; from += 1000) {
+      let q = sb.from(table).select("*").range(from, from + 999);
+      if (filter) q = filter(q);
+      const { data, error } = await q;
+      if (error) throw error;
+      out.push(...data);
+      if (data.length < 1000) break;
+    }
+    return out;
+  }
+  /* All reported values (measurements) attached to their molecules as m.meas. */
+  async function attachMeasurements(mols) {
+    let list = [];
+    try {
+      if (sb) list = await selectAll("measurements");
+      else {
+        const raw = await fetchLocal("../data/measurements.json");
+        const byKey = new Map(mols.map(m => [m.import_key, m.id]));
+        list = raw.map(r => Object.assign({}, r, { molecule_id: byKey.get(r.molecule_key) }));
+      }
+    } catch (e) { list = []; }
+    const byId = new Map(mols.map(m => [m.id, m]));
+    mols.forEach(m => { m.meas = []; });
+    list.forEach(r => { const m = byId.get(r.molecule_id); if (m) m.meas.push(r); });
+    return mols;
+  }
+  /* Summary of one quantity: mean ± SD of experimental values used in the average, and computed mean. */
+  function measStats(m, q) {
+    const all = (m.meas || []).filter(r => r.quantity === q && r.status !== "rejected");
+    const ex = all.filter(r => r.kind === "experimental" && r.in_average !== false).map(r => Number(r.value));
+    const calc = all.filter(r => r.kind === "computational").map(r => Number(r.value));
+    const stat = v => {
+      if (!v.length) return null;
+      const mean = v.reduce((a, b) => a + b, 0) / v.length;
+      const sd = v.length > 1 ? Math.sqrt(v.reduce((a, b) => a + (b - mean) ** 2, 0) / (v.length - 1)) : null;
+      return { mean, sd, n: v.length, min: Math.min(...v), max: Math.max(...v) };
+    };
+    return { all, exp: stat(ex), calc: stat(calc) };
   }
   async function loadReactions() {
     if (sb) {
@@ -323,7 +454,7 @@
   window.RDB = {
     remote, sb, MOL_FIELDS, REFERENCES, REF_DOI, refOffset, toSCE, fromSCE, refOptions,
     esc, fmt, fmtV, num, doiLink, molSVG, structHTML, molFromSmiles,
-    loadMolecules, loadReactions, session, signIn, signOut, myRole, gate, initTheme,
+    loadMolecules, loadReactions, attachMeasurements, measStats, selectAll, session, signIn, signOut, myRole, gate, initTheme,
     download, toCSV, modal, parseNumericTable
   };
 })();

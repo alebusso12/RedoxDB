@@ -71,24 +71,7 @@
     </g>
   </svg>`;
 
-  const SVG_CV = `
-  <svg viewBox="0 0 760 330" class="diagram" role="img" aria-label="Annotated reversible cyclic voltammogram">
-    <g fill="currentColor" font-size="13">
-      <line x1="60" y1="170" x2="720" y2="170" stroke="var(--muted)" stroke-dasharray="4 4"/>
-      <line x1="60" y1="30" x2="60" y2="300" stroke="var(--muted)"/>
-      <text x="390" y="320" text-anchor="middle">E (V) →  (scan to positive potential, then back)</text>
-      <text x="22" y="170" transform="rotate(-90 22 170)" text-anchor="middle">i (oxidation +)</text>
-      <path d="M80 168 C 220 166, 270 150, 320 90 C 345 58, 372 56, 392 84 C 420 120, 470 128, 700 132" fill="none" stroke="var(--accent-2)" stroke-width="3"/>
-      <path d="M700 196 C 520 196, 440 200, 410 240 C 390 268, 362 270, 345 246 C 320 210, 240 176, 80 172" fill="none" stroke="var(--accent)" stroke-width="3"/>
-      <line x1="372" x2="372" y1="56" y2="170" stroke="var(--accent-2)" stroke-dasharray="3 3"/>
-      <line x1="362" x2="362" y1="170" y2="270" stroke="var(--accent)" stroke-dasharray="3 3"/>
-      <text x="380" y="50" fill="var(--accent-2)" style="fill:var(--accent-2)">E_pa (anodic peak, M → M•+)</text>
-      <text x="200" y="290" fill="var(--accent)" style="fill:var(--accent)">E_pc (cathodic peak, M•+ → M)</text>
-      <line x1="367" x2="367" y1="150" y2="190" stroke="var(--ok)" stroke-width="3"/>
-      <text x="480" y="232" fill="var(--ok)" style="fill:var(--ok)">E½ = (E_pa + E_pc)/2</text>
-      <text x="480" y="250" fill="var(--muted)" style="fill:var(--muted)">ΔE_p ≈ 57 mV / n if reversible</text>
-    </g>
-  </svg>`;
+
 
   const SVG_CELL = `
   <svg viewBox="0 0 760 300" class="diagram" role="img" aria-label="Three-electrode electrochemical cell">
@@ -350,7 +333,7 @@
         <li><b>Scan rate v</b> (e.g. 100 mV/s): how fast the potential changes. It must always be reported.</li>
         <li><b>Two plotting conventions exist</b> and papers rarely say which one they use: in the <b>IUPAC</b> convention positive potentials are to the right and oxidation (anodic) currents are positive; in the older <b>US/polarographic</b> convention negative potentials are to the right and reduction currents are positive. Look at the direction of the potential axis to tell them apart. This site (and its CV reader) uses IUPAC.</li>
       </ul>
-      ${SVG_CV}
+      <div id="cv-annot" class="diagram-plot"></div><p class="hint">Simulated voltammogram of a reversible one-electron oxidation (1 mM, 100 mV/s, 3 mm electrode), IUPAC convention, potentials vs the formal potential E°′ of the couple (for ferrocene this is the Fc⁺/Fc scale).</p>
 
       <h4>6.3 Why the "duck" shape? Nernst equation and diffusion</h4>
       <p>At the electrode surface the ratio of oxidised to reduced form follows the <b>Nernst equation</b>:</p>
@@ -512,6 +495,49 @@
     };
     ["e0-ox", "e0-red", "e0-e"].forEach(id => $(id).addEventListener("input", e0));
     e0();
+
+    // Annotated reference voltammogram (computed, so peak positions and currents are real)
+    if ($("cv-annot")) {
+      const fr = simulateCV(0.1);
+      const fwd = fr.findIndex((x, j) => j > 0 && x.E < fr[j - 1].E);
+      let a = 0, c = 0;
+      fr.forEach((x, k) => { if (x.i > fr[a].i) a = k; if (x.i < fr[c].i) c = k; });
+      const Epa = fr[a].E, Epc = fr[c].E, E12 = (Epa + Epc) / 2;
+      const svg = RDBPlot.plot($("cv-annot"), {
+        series: [{ x: fr.slice(0, fwd).map(x => x.E), y: fr.slice(0, fwd).map(x => x.i), color: "var(--accent-2)", width: 2.4 },
+                 { x: fr.slice(fwd - 1).map(x => x.E), y: fr.slice(fwd - 1).map(x => x.i), color: "var(--accent)", width: 2.4 }],
+        hlines: [{ y: 0 }],
+        vlines: [{ x: Epc, color: "var(--accent)", label: "E_pc", row: 1 },
+                 { x: Epa, color: "var(--accent-2)", label: "E_pa", row: 0 },
+                 { x: E12, color: "var(--ok)", dash: "2 3" }],
+        points: [{ x: Epa, y: fr[a].i, color: "var(--accent-2)" }, { x: Epc, y: fr[c].i, color: "var(--accent)" }],
+        xLabel: "E (V vs E°′)  —  positive potentials to the right (IUPAC)", yLabel: "i (µA), oxidation positive",
+        height: 380, xRange: [-0.32, 0.42], legend: false
+      });
+      const sc = svg.__scale, NS = "http://www.w3.org/2000/svg";
+      const g = document.createElementNS(NS, "g");
+      const yb = sc.sy(fr[c].i) - 14;
+      const bx = sc.m.l + sc.pw - 250, by = sc.m.t + sc.ph - 128;
+      const line = (t, k, col) => `<text x="${bx + 12}" y="${by + 22 + k * 18}" font-size="12" fill="${col}" style="fill:${col}">${t}</text>`;
+      g.innerHTML = `
+        <line x1="${sc.sx(Epc)}" x2="${sc.sx(Epa)}" y1="${yb}" y2="${yb}" stroke="var(--ok)" stroke-width="2"/>
+        <line x1="${sc.sx(Epc)}" x2="${sc.sx(Epc)}" y1="${yb - 5}" y2="${yb + 5}" stroke="var(--ok)" stroke-width="2"/>
+        <line x1="${sc.sx(Epa)}" x2="${sc.sx(Epa)}" y1="${yb - 5}" y2="${yb + 5}" stroke="var(--ok)" stroke-width="2"/>
+        <text x="${(sc.sx(Epa) + sc.sx(Epc)) / 2}" y="${yb + 17}" text-anchor="middle" font-size="12" fill="var(--ok)" style="fill:var(--ok)">ΔE_p</text>
+        <text x="${sc.sx(Epa) + 10}" y="${sc.sy(fr[a].i) + 4}" font-size="12" fill="var(--accent-2)" style="fill:var(--accent-2)">i_pa</text>
+        <text x="${sc.sx(Epc) - 30}" y="${sc.sy(fr[c].i) + 18}" font-size="12" fill="var(--accent)" style="fill:var(--accent)">i_pc</text>
+        <path d="M${sc.sx(-0.2)} ${sc.sy(3)} l 40 0" stroke="var(--accent-2)" stroke-width="2" marker-end="url(#cvar)"/>
+        <path d="M${sc.sx(0.3)} ${sc.sy(4.2)} l -40 0" stroke="var(--accent)" stroke-width="2" marker-end="url(#cvar2)"/>
+        <defs><marker id="cvar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="var(--accent-2)"/></marker>
+        <marker id="cvar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="var(--accent)"/></marker></defs>
+        <rect x="${bx}" y="${by}" width="240" height="118" rx="8" fill="var(--surface)" stroke="var(--border)"/>
+        ${line(`forward (anodic) scan →  red`, 0, "var(--accent-2)")}
+        ${line(`E_pa = +${(Epa * 1000).toFixed(0)} mV,  i_pa = ${fr[a].i.toFixed(1)} µA`, 1, "currentColor")}
+        ${line(`E_pc = ${(Epc * 1000).toFixed(0)} mV,  i_pc = ${fr[c].i.toFixed(1)} µA`, 2, "currentColor")}
+        ${line(`E½ = (E_pa + E_pc)/2 = ${(E12 * 1000).toFixed(0)} mV ≈ E°′`, 3, "var(--ok)")}
+        ${line(`ΔE_p = ${((Epa - Epc) * 1000).toFixed(0)} mV (≈ 57 mV: reversible)`, 4, "var(--ok)")}`;
+      svg.appendChild(g);
+    }
 
     // CV simulator
     let frames = null, peaks = null;

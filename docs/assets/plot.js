@@ -22,6 +22,7 @@
     return e;
   }
   function fmtTick(v) {
+    if (Math.abs(v) < 1e-9) return "0";
     const a = Math.abs(v);
     if (a !== 0 && (a < 1e-3 || a >= 1e5)) return v.toExponential(1);
     return String(+v.toPrecision(4));
